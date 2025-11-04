@@ -132,7 +132,7 @@ class BasicOpBlackboardDataset(GeneratedDataset):
     def _generate_blackboard_pairs(self, a: Number, b: Number):
 
         # perform hand addition or subtraction and store the digit steps in lists
-        max_input_length = max(np.log10(a).ceil(), np.log10(b).ceil())
+        max_input_length = max(np.log10(a).floor(), np.log10(b).floor())
 
         digits_a = np.empty(max_input_length, dtype=int)
         digits_b = np.empty(max_input_length, dtype=int)
