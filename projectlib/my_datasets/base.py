@@ -30,6 +30,9 @@ class GeneratedDataset(Dataset, ABC):
         self.tokenizer = tokenizer
         self.max_length = max_length
 
+        if not os.path.exists(DATASETS_BASE_DIR):
+            os.makedirs(DATASETS_BASE_DIR)
+
         if os.path.exists(path) and not regenerate:
             saved = torch.load(path)
             self.data = saved["data"]
