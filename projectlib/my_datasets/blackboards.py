@@ -17,11 +17,15 @@ class BlackboardSpec:
     randomize_position: bool
     operation: CarryOperation
 
+# blackboard configuration
 EVAL_PATH_BASE = "datasets/{}_eval.pt"
 TRAIN_PATH_BASE = "datasets/{}_train.pt"
 BASE_GEN_SPEC = GenerationSpec(10, 10, 20)
 BASE_BLACKBOARD_SPEC = BlackboardSpec(5, 15, False, Addition())
 
+# tokenization configuration
+BB_ROW_SEP_TOKEN = "[SEP]"
+BB_PAD_TOKEN     = "[PAD]"
 
 class BasicOpBlackboardIterator:
     def __init__(
@@ -30,6 +34,15 @@ class BasicOpBlackboardIterator:
         op2: np.ndarray,
         spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
     ):
+        """
+        Iterator that generates a sequence of blackboard states for the specified operations. It also takes care of board position randomization
+        and ensures that the blackboard states fit the requested dimensions.
+
+        Args:
+            op1 (np.ndarray): The first operand encoded as digit array.
+            op2 (np.ndarray): The second operand encoded as digit array.
+            spec (BlackboardSpec): The blackboard specification.
+        """
 
         if len(op1) != len(op2):
             raise ValueError("Operation arrays must be of equal length. Use zero padding")
@@ -44,11 +57,11 @@ class BasicOpBlackboardIterator:
         self.last_carry = 0
 
         self.curr_bb_state = [
-            list(" _"+self.oplen*"_"),
-            list("  " + "".join([str(x) for x in op1])),
-            list(str(spec.operation) + " " + "".join([str(x) for x in op2])),
-            list("--"+self.oplen*"-"),
-            list(" _"+self.oplen*"_")
+            [BB_PAD_TOKEN]+(self.oplen+1)*["_"],
+            2*[BB_PAD_TOKEN] + [str(x) for x in op1],
+            [str(spec.operation), BB_PAD_TOKEN] + [str(x) for x in op2],
+            (self.oplen+2) * ["-"],
+            [BB_PAD_TOKEN]+["_"]*(self.oplen+1)
         ]
 
         self.random_x_start = 0
@@ -72,7 +85,7 @@ class BasicOpBlackboardIterator:
         if self.step == self.oplen + 2:
             raise StopIteration
 
-        retval = self._pack()
+        retval = self._position_and_flatten()
         self.step += 1
 
         if self.step <= self.oplen:
@@ -89,36 +102,51 @@ class BasicOpBlackboardIterator:
     def _int_to_list(self, num: int):
         return [int(digit) for digit in str(num)]
 
-    def _pack(self):
-        x_pad_start = self.random_x_start * " "
-        x_pad_end = (self.spec.width - self.random_x_start - self.oplen - 2) * " "
+    def _position_and_flatten(self):
+        """Position the blackboard and pack the current state of the blackboard into a encoded string suitable for tokenization."""
 
-        ypadstr = self.spec.width * " "
-        y_pad_start = self.random_y_start * [ypadstr]
-        y_pad_end = (self.spec.height - self.random_y_start - 5) * [ypadstr]
+        # create a 2d grid of size self.spec.height x self.spec.width
+        x_pad_start = self.random_x_start * [BB_PAD_TOKEN]  # padding in front of each row
+        x_pad_end = (self.spec.width - self.random_x_start - self.oplen - 2) * [BB_PAD_TOKEN] + [BB_ROW_SEP_TOKEN] # padding at the end of each row
 
-        """Pack the current state of the blackboard into a list of strings."""
-        return y_pad_start + [x_pad_start + "".join(x) + x_pad_end for x in self.curr_bb_state] + y_pad_end
+        ypadstr = self.spec.width * [BB_PAD_TOKEN] + [BB_ROW_SEP_TOKEN]    # this is just an empty row
+        y_pad_start = self.random_y_start * [ypadstr] # empty rows before blackboard data starts
+        y_pad_end = (self.spec.height - self.random_y_start - 5) * [ypadstr] # empty rows after blackboard data ends
 
+        grid = (
+            y_pad_start +
+            [x_pad_start + x + x_pad_end for x in self.curr_bb_state] +
+            y_pad_end
+        )
 
+        # linearize the grid into a single string, separate all tokens with a space so the tokenizer can separate them
+        grid_str = ' '.join([' '.join(row) for row in grid])
+        return grid_str
 
 class BasicOpBlackboardDataset(GeneratedDataset):
     def __init__(
         self,
-        path: str,
+        path: str = None,
         tokenizer: AutoTokenizer = None,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
     ):
         path = path or TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name())
+
+        self.specs = blackboard_spec
+
+        # generate data
         super().__init__(
             path,
             tokenizer,
             regenerate,
             generation_spec,
         )
-        self.specs = blackboard_spec
+
+        # preapare tokenizer, make sure it knows the sep token
+        if(self.tokenizer is not None):
+            self.tokenizer.add_special_tokens({'sep_token': BB_ROW_SEP_TOKEN, 'pad_token': BB_PAD_TOKEN})
 
     @override
     def __generate__(self, spec: GenerationSpec):
@@ -126,6 +154,7 @@ class BasicOpBlackboardDataset(GeneratedDataset):
         labels = []
 
         for _ in range(spec.size):
+            # size is interpreted as the number of blackboard computation chains to generate
             a = torch.randint(spec.low, spec.high, (1,)).item()
             b = torch.randint(spec.low, spec.high, (1,)).item()
 
@@ -136,12 +165,14 @@ class BasicOpBlackboardDataset(GeneratedDataset):
             inputs += input_states
             labels += output_states
 
+        print("Generated", spec.size, "blackboard chains consisting of", len(inputs)+1, "blackboards")
+
         return inputs, labels
 
     def _generate_blackboard_pairs(self, a: Number, b: Number):
 
         # perform hand addition or subtraction and store the digit steps in lists
-        max_input_length = max(np.log10(a).floor(), np.log10(b).floor())
+        max_input_length = max(np.floor(np.log10(a)).astype(np.int32), np.floor(np.log10(b)).astype(np.int32))
 
         digits_a = np.empty(max_input_length, dtype=int)
         digits_b = np.empty(max_input_length, dtype=int)
@@ -154,3 +185,8 @@ class BasicOpBlackboardDataset(GeneratedDataset):
         blackboards = [*BasicOpBlackboardIterator(digits_a, digits_b, self.specs)]
 
         return blackboards[:-1], blackboards[1:]
+
+    def __getitem__(self, idx: int):
+        # TODO: implement custom __getitem__ method which does correct tokenization
+        # I think we first briefly need to discuss this in a meeting
+        return super().__getitem__(idx)
