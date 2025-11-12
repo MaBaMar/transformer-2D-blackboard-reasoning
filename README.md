@@ -19,4 +19,12 @@ python -m projectlib.test_blackboard
 This ensures all modules and libraries are properly found.
 
 ### datasets
-Contains scripts to generate datasets and the generated datasets (preferrably as pytorch datasets)
+Contains scripts to generate datasets and the generated datasets (preferrably as pytorch datasets).
+
+Run this command to generate datasets with a specific amount of digits:
+
+```
+python -m projectlib.datagen --digits 5
+```
+
+This will generate evaluation datasets for the baselines and a training and evaluation dataset for the blackboards.

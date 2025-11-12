@@ -18,8 +18,8 @@ class BlackboardSpec:
     operation: CarryOperation
 
 # blackboard configuration
-EVAL_PATH_BASE = "datasets/{}_eval.pt"
-TRAIN_PATH_BASE = "datasets/{}_train.pt"
+EVAL_PATH_BASE = "datasets/bb_{}_eval.pt"
+TRAIN_PATH_BASE = "datasets/bb_{}_train.pt"
 BASE_GEN_SPEC = GenerationSpec(10, 10, 20)
 BASE_BLACKBOARD_SPEC = BlackboardSpec(5, 15, False, Addition())
 
@@ -128,11 +128,12 @@ class BasicOpBlackboardDataset(GeneratedDataset):
         self,
         path: str = None,
         tokenizer: AutoTokenizer = None,
+        train: bool = True,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
     ):
-        path = path or TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name())
+        path = path or (TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name()) if train else EVAL_PATH_BASE.format(blackboard_spec.operation.get_name()))
 
         self.specs = blackboard_spec
 
