@@ -2,19 +2,13 @@
 
 from projectlib.my_datasets._blackboard_operands import *
 from projectlib.my_datasets.blackboards import BASE_GEN_SPEC, BasicOpBlackboardDataset, BasicOpBlackboardIterator, BlackboardSpec, BB_PAD_TOKEN, BB_ROW_SEP_TOKEN
+from projectlib.my_datasets.utils import bb_tokinpt_to_str
 from transformers import AutoTokenizer
 
 import numpy as np
 import torch
 
-# TODO: after finalizing tokenization and dataset layout, move to utils.py
-def print_board(board):
-    rows = board.replace(' ', '').replace(BB_PAD_TOKEN, ' ').split(BB_ROW_SEP_TOKEN)[:-1]
-    print("-" * (len(rows[0]) + 2))
-    for row in rows:
-        print(f"|{row}|")
-    print("-" * (len(rows[0]) + 2))
-
+# NOTE: There are no automated tests for this script yet, because the tokenization and string format will have to be adjusted to match the model's requirements.
 if __name__ == "__main__":
 
     # perform and inspect a demo operation
@@ -26,7 +20,7 @@ if __name__ == "__main__":
 
     b = BasicOpBlackboardIterator(x, y, spec)
     for board in b:
-        print_board(board)
+        print(bb_tokinpt_to_str(board, BB_PAD_TOKEN, BB_ROW_SEP_TOKEN))
 
     gen_spec = BASE_GEN_SPEC
     gen_spec.size = 1
@@ -43,8 +37,8 @@ if __name__ == "__main__":
 
     assert(len(token_seq) == len(input_str.split(" "))+2)
     print(torch.tensor(token_seq[1:-1]).view((5,16))) #omit sequence start and sequence end
-    print_board(dataset[0]['input'])
-    print_board(dataset[0]['label'])
+    print(bb_tokinpt_to_str(dataset[0]['input'], BB_PAD_TOKEN, BB_ROW_SEP_TOKEN))
+    print(bb_tokinpt_to_str(dataset[0]['label'], BB_PAD_TOKEN, BB_ROW_SEP_TOKEN))
 
     # some tokenizers split symbols into multiple tokens. We don't want that. Maybe think about it in next meeting.
     t = AutoTokenizer.from_pretrained("t5-small")
