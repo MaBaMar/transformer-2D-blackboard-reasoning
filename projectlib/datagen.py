@@ -26,16 +26,20 @@ BB_WIDTH = 32
 BB_RANDOMIZE_POS = False
 BB_OPERATION = Addition()
 
+TRAIN_PATH_BASE = "datasets/{}_train.pt"
+EVAL_PATH_BASE = "datasets/{}_eval.pt"
+
 
 #
 #   Functions that generate train/eval datasets of each type
 #
 
 
-def generate_addition(low: int, high: int):
+def generate_addition(digits: int, low: int, high: int):
     tokenizer = AutoTokenizer.from_pretrained("t5-small")
 
     AdditionDataset(
+        path=EVAL_PATH_BASE.format(f"addition_{digits}"),
         tokenizer=tokenizer,
         train=False,
         regenerate=REGENERATE,
@@ -44,10 +48,11 @@ def generate_addition(low: int, high: int):
     )
 
 
-def generate_scratchpad(low: int, high: int):
+def generate_scratchpad(digits: int, low: int, high: int):
     tokenizer = AutoTokenizer.from_pretrained("t5-small")
 
     ScratchpadDataset(
+        path=EVAL_PATH_BASE.format(f"scratchpad_{digits}"),
         tokenizer=tokenizer,
         train=False,
         regenerate=REGENERATE,
@@ -56,7 +61,7 @@ def generate_scratchpad(low: int, high: int):
     )
 
 
-def generate_blackboard(low: int, high: int):
+def generate_blackboard(digits: int, low: int, high: int):
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     tokenizer.add_special_tokens({'pad_token': BB_PAD_TOKEN, 'sep_token': BB_ROW_SEP_TOKEN})
 
@@ -67,7 +72,10 @@ def generate_blackboard(low: int, high: int):
         operation=BB_OPERATION
     )
 
+    name = f"bb_{bb_spec.operation.get_name()}_{digits}"
+
     BasicOpBlackboardDataset(
+        path=TRAIN_PATH_BASE.format(name),
         tokenizer=tokenizer,
         regenerate=REGENERATE,
         train=True,
@@ -76,6 +84,7 @@ def generate_blackboard(low: int, high: int):
     )
 
     BasicOpBlackboardDataset(
+        path=EVAL_PATH_BASE.format(name),
         tokenizer=tokenizer,
         regenerate=REGENERATE,
         train=False,
@@ -95,9 +104,9 @@ def main(digits: int):
 
     print(f"Generating datasets with {digits}-digit numbers in the range [{low}, {high}) ...")
 
-    generate_addition(low, high)
-    generate_scratchpad(low, high)
-    generate_blackboard(low, high)
+    generate_addition(digits, low, high)
+    generate_scratchpad(digits, low, high)
+    generate_blackboard(digits, low, high)
 
 
 if __name__ == "__main__":
