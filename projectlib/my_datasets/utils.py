@@ -52,3 +52,25 @@ def digits_to_str(digits: list[int]) -> str:
     if len(digits) == 0:
         return ""
     return " ".join(map(str, digits))
+
+
+def bb_tokinpt_to_str(board: str, pad_token: str, row_sep_token: str) -> str:
+    """Convert a blackboard state encoded in a tokenizer-friendly format into a well-readable string.
+
+    Args:
+        board (str): The blackboard state encoded in a tokenizer-friendly format
+        pad_token (str): The token used to pad the board
+        row_sep_token (str): The token used to separate rows
+
+    Returns:
+        out (str): The blackboard state as a printable string.
+    """
+
+    out = ""
+    rows = board.replace(' ', '').replace(pad_token, ' ').split(row_sep_token)[:-1]
+    out += "-" * (len(rows[0]) + 2) + "\n"
+    for row in rows:
+        out += f"|{row}|\n"
+    out += "-" * (len(rows[0]) + 2) + "\n"
+
+    return out

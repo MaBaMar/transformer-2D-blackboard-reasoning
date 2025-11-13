@@ -46,7 +46,7 @@ class BasicOpBlackboardIterator:
 
         if len(op1) != len(op2):
             raise ValueError("Operation arrays must be of equal length. Use zero padding")
-        if spec.width <len(op1) + 2 or spec.height < 5:
+        if spec.width < len(op1) + 2 or spec.height < 5:
             raise ValueError(f"Generated blackboard states cannot fit the requested dimensions of {spec.height} x {spec.width}. Input numbers require a size of at least 5 x {len(op1) + 2}")
 
         self.spec = spec
@@ -189,5 +189,5 @@ class BasicOpBlackboardDataset(GeneratedDataset):
 
     def __getitem__(self, idx: int):
         # TODO: implement custom __getitem__ method which does correct tokenization
-        # I think we first briefly need to discuss this in a meeting
+        # Note from Marco: I will update this once Lino communicates the model's requirements
         return super().__getitem__(idx)
