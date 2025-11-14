@@ -5,7 +5,7 @@ import re
 
 import numpy as np
 
-from transformers import pipeline, AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -15,6 +15,12 @@ from projectlib.my_datasets import *
 
 MODEL_PATHS = {
     "Llama-13B": "TheBloke/LLaMA-13b-GGUF",
+    "Llama-8B": "meta-llama/Meta-Llama-3-8B",
+}
+
+TOKENIZER_PATHS = {
+    "Llama-13B": "TheBloke/LLaMA-13b-GGUF",
+    "Llama-8B": "meta-llama/Meta-Llama-3-8B",
 }
 
 
@@ -49,8 +55,8 @@ def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
 
 
 def check_prediction(prediction: str, label: str) -> int:
-    result_true = extract_label_number(label)
-    result_pred = extract_label_number(prediction)
+    result_true = extract_label_number(label[0])
+    result_pred = extract_label_number(prediction[0])
 
     print(f"result_true: {result_true} and result_pred: {result_pred}")
 
@@ -89,10 +95,10 @@ def experiment(
     ):
 
     wandb.init(
+        name=name,
         entity="blackboard-reasoning",
         project="blackboard-reasoning",
         config={
-            "name": name,
             "model": model_name,
             "path_to_model": MODEL_PATHS[model_name],
             "task": task,
@@ -106,19 +112,22 @@ def experiment(
     torch.manual_seed(seed)
     np.random.seed(seed)
     
-    device = 0 if torch.cuda.is_available() else -1 # 0 for GPU, -1 for CPU
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #
     #   Load the model and the dataset
     #
 
-    print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
+    print(f"Evaluating {model_name} [{MODEL_PATHS[model_name]}] on {task} with {digits}-digits\n")
 
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATHS[model_name])
-    model = AutoModel.from_pretrained(
+    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATHS[model_name])
+    model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATHS[model_name], 
         dtype="auto",
         device_map="auto" if torch.cuda.is_available() else None,
+        quantization_config=quantization_config,
     )
     model.eval()
 
@@ -138,14 +147,14 @@ def experiment(
         input = tokenizer(input_text, return_tensors="pt").to(device)
 
         with torch.no_grad():
-            output = model.generate(
+            outputs = model.generate(
                 **input,
                 max_new_tokens=64,
                 do_sample=False,
                 temperature=0.0,
             )
 
-        prediction = tokenizer.decode(output, skip_special_tokens=True).strip()
+        prediction = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
 
         correct += check_prediction(prediction, label)
 
@@ -166,6 +175,7 @@ def main(args):
         model_name=args.model_name,
         task=args.task,
         digits=args.digits,
+        size=args.size,
         seed=args.seed,
         logging=args.logging,
     )
@@ -178,6 +188,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--task", type=str)
     parser.add_argument("--digits", type=int)
+    parser.add_argument("--size", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     args, _ = parser.parse_known_args()

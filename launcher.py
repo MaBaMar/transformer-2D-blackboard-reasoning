@@ -1,6 +1,6 @@
 import argparse
 
-from evaluation.experiment import *
+from evaluation import experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
@@ -12,14 +12,16 @@ LOGGING = "wandb"   # "wandb", "local", "none"
 applicable_configs = {
     "seed": [i for i in range(1)],
     "models": [
-        "Llama-13B",     
+        #"Llama-13B",
+        "Llama-8B",
     ],
     "task": [
         "addition",
         "scratchpad",
         #"blackboard",
     ],
-    "digits": [3]
+    "digits": [3],
+    "sizes": [100],
 }
 
 def main(args):
@@ -27,17 +29,19 @@ def main(args):
     for model in applicable_configs["models"]:
         for task in applicable_configs["task"]:
             for digits in applicable_configs["digits"]:
-                for seed in applicable_configs["seed"]:
-                    flags = {
-                        "name": NAME,
-                        "model_name": model,
-                        "task": task,
-                        "digits": digits,
-                        "seed": seed,
-                        "logging": LOGGING,
-                    }
-                    cmd = generate_base_command(experiment, flags=flags)
-                    command_list.append(cmd)
+                for size in applicable_configs["sizes"]:
+                    for seed in applicable_configs["seed"]:
+                        flags = {
+                            "name": NAME,
+                            "model_name": model,
+                            "task": task,
+                            "digits": digits,
+                            "size": size,
+                            "seed": seed,
+                            "logging": LOGGING,
+                        }
+                        cmd = generate_base_command(experiment, flags=flags)
+                        command_list.append(cmd)
 
     generate_run_commands(
         command_list,

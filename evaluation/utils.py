@@ -15,6 +15,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 RESULT_DIR = os.path.join(BASE_DIR, "results")
 
+CONDA_ENV = "dl"
+
 """ Custom Logger """
 
 
@@ -98,11 +100,11 @@ def generate_base_command(
 
     """ Module is a python file to execute """
     interpreter_script = sys.executable
-    base_exp_script = os.path.abspath(module.__file__)
+    base_exp_script = module.__name__
     if unbuffered:
-        base_cmd = interpreter_script + " -u " + base_exp_script
+        base_cmd = interpreter_script + " -u -m " + base_exp_script
     else:
-        base_cmd = interpreter_script + " " + base_exp_script
+        base_cmd = interpreter_script + " -m " + base_exp_script
     if flags is not None:
         assert isinstance(flags, dict), "Flags must be provided as dict"
         for flag, setting in flags.items():
@@ -166,10 +168,12 @@ def generate_run_commands(
 
         if answer == "yes":
             for cmd in command_list:
+                wrapped_cmd = f"bash -i -c \"conda activate {CONDA_ENV}; {cmd}\""
+
                 if dry:
-                    print(cmd)
+                    print(wrapped_cmd)
                 else:
-                    os.system(cmd)
+                    os.system(wrapped_cmd)
 
     elif mode == "local_async":
         if promt:
