@@ -1,4 +1,15 @@
-# 2d_transformer.py
+# ------------------------------------------------------------
+# 2d_transformer.py: Minimal 2D-aware GPT-style model
+
+# NOTE:
+#  - IMPORTANT PART: 2D positional encoding class (TwoDPositionalEncoding) for the positional embeddings and how it is
+#    added in the forward() of CausalTransformer2DPE.
+#  - REST: Filler for dataset, tokenizer, training loop, generation so that the file can run end-to-end on toy data.
+
+# TODO: Replace dataset, tokenizer, training loop, generation, etc.
+#    later with real logic.
+# ------------------------------------------------------------
+
 import math
 from dataclasses import dataclass
 from typing import List, Tuple, Dict
@@ -9,199 +20,200 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 
-# ------------------------------
-# 1) Toy tokenizer (replace later)
-# ------------------------------
+# Simple tokenizer to get the demo running.
+# => Replace this with our real tokenizer later.
 class SimpleVocab:
-    def __init__(self, specials: List[str] = None):
+    def __init__(self, specials=None):
         specials = specials or ["<pad>", "<bos>", "<eos>"]
-        self.stoi: Dict[str, int] = {}
-        self.itos: List[str] = []
+
+        self.stoi = {}
+        self.itos = []
+
+        # add special tokens
         for tok in specials:
             self.add(tok)
 
-    def add(self, tok: str) -> int:
+    def add(self, tok):
+        """grow vocab dynamically"""
         if tok not in self.stoi:
             self.stoi[tok] = len(self.itos)
             self.itos.append(tok)
         return self.stoi[tok]
 
-    def encode(self, tokens: List[str]) -> List[int]:
-        return [self.add(t) for t in tokens]
-
-    def decode(self, ids: List[int]) -> List[str]:
-        return [self.itos[i] for i in ids]
+    # Encoding/decoding (again: demo only)
+    def encode(self, tokens): return [self.add(t) for t in tokens]
+    def decode(self, ids):     return [self.itos[i] for i in ids]
 
     @property
-    def pad_id(self) -> int:
-        return self.stoi["<pad>"]
-
+    def pad_id(self): return self.stoi["<pad>"]
     @property
-    def bos_id(self) -> int:
-        return self.stoi["<bos>"]
-
+    def bos_id(self): return self.stoi["<bos>"]
     @property
-    def eos_id(self) -> int:
-        return self.stoi["<eos>"]
-
+    def eos_id(self): return self.stoi["<eos>"]
     @property
-    def size(self) -> int:
-        return len(self.itos)
+    def size(self):   return len(self.itos)
 
 
-# --------------------------------------------------
-# 2) Example dataset: flatten a 2D grid into sequence
-#    and produce (px, py) coordinates per token
-# --------------------------------------------------
+# Tiny dataset: turns a 2D grid of tokens into a sequence.
+# => Real project will NOT use this logic.
+# => Kept only because we need *something* to train on.
 class GridLMExample(Dataset):
     """
-    Each sample is a 2D list of tokens, e.g.
-    [
-      ["A11", "A12", "A13"],
-      ["A21", "A22", "A23"],
-    ]
-    We flatten row-major and append <eos>.
-    Coordinates (px, py) are 1-based; 0 reserved for padding.
+    - Input: grid[x][y] tokens
+    - Flatten row-major
+    - Also produce px, py = 2D coordinates for each token
+    - Coordinates start at 1, padding = 0
     """
-    def __init__(self, grids: List[List[List[str]]], vocab: SimpleVocab):
+
+    def __init__(self, grids, vocab):
         self.vocab = vocab
         self.samples = []
+
         for grid in grids:
             rows = len(grid)
             cols = max(len(r) for r in grid)
-            # normalize to rectangular (pad with a placeholder token if needed)
-            norm = [r + ["<pad_tok>"] * (cols - len(r)) for r in grid]
-            for tok in ["<pad_tok>"] + sum(norm, []):
-                self.vocab.add(tok)  # grow vocab
 
-            # flatten row-major
-            flat_tokens = []
-            px = []  # col index (1..cols)
-            py = []  # row index (1..rows)
+            # make rectangular
+            norm = [r + ["<pad_tok>"] * (cols - len(r)) for r in grid]
+
+            # grow vocab
+            for tok in ["<pad_tok>"] + sum(norm, []):
+                self.vocab.add(tok)
+
+            # flatten
+            flat, px, py = [], [], []
             for y, row in enumerate(norm):
                 for x, t in enumerate(row):
-                    flat_tokens.append(t)
+                    flat.append(t)
                     px.append(x + 1)  # 1-based
-                    py.append(y + 1)  # 1-based
-            flat_tokens.append("<eos>")  # next-token target boundary
+                    py.append(y + 1)
 
-            ids = self.vocab.encode(flat_tokens)
-            # For the <eos>, give a dummy coordinate = last token's coords
-            px.append(px[-1] if px else 1)
-            py.append(py[-1] if py else 1)
+            # add eos
+            flat.append("<eos>")
+            ids = vocab.encode(flat)
+
+            px.append(px[-1])
+            py.append(py[-1])
 
             self.samples.append({
-                "input_ids": torch.tensor(ids[:-1], dtype=torch.long),
-                "labels":    torch.tensor(ids[1:],  dtype=torch.long),
-                "pos_x":     torch.tensor(px[:-1],  dtype=torch.long),
-                "pos_y":     torch.tensor(py[:-1],  dtype=torch.long),
+                "input_ids": torch.tensor(ids[:-1]),
+                "labels":    torch.tensor(ids[1:]),
+                "pos_x":     torch.tensor(px[:-1]),
+                "pos_y":     torch.tensor(py[:-1]),
             })
 
-        # record max extents for embedding table sizes
-        self.max_x = max(s["pos_x"].max().item() for s in self.samples) if self.samples else 1
-        self.max_y = max(s["pos_y"].max().item() for s in self.samples) if self.samples else 1
+        # extents needed for the embedding tables
+        self.max_x = max(s["pos_x"].max().item() for s in self.samples)
+        self.max_y = max(s["pos_y"].max().item() for s in self.samples)
 
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx: int):
-        return self.samples[idx]
+    def __len__(self): return len(self.samples)
+    def __getitem__(self, idx): return self.samples[idx]
 
 
-def pad_1d(seqs: List[torch.Tensor], pad: int) -> torch.Tensor:
+# Batch padding helper (demo only)
+def pad_1d(seqs, pad):
     L = max(s.size(0) for s in seqs)
     out = torch.full((len(seqs), L), pad, dtype=seqs[0].dtype)
-    for i, s in enumerate(seqs):
-        out[i, :s.size(0)] = s
+    for i, s in enumerate(seqs): out[i, :s.size(0)] = s
     return out
 
-
-def collate_batch(batch, pad_id: int):
-    # pad input_ids, labels, pos_x, pos_y
+def collate_batch(batch, pad_id):
+    """pads tokens + coords — demo only"""
     input_ids = pad_1d([b["input_ids"] for b in batch], pad_id)
-    labels    = pad_1d([b["labels"]    for b in batch], -100)  # ignore index for CE
-    pos_x     = pad_1d([b["pos_x"]     for b in batch], 0)     # 0 == "no position" (padding)
+    labels    = pad_1d([b["labels"]    for b in batch], -100)
+    pos_x     = pad_1d([b["pos_x"]     for b in batch], 0)
     pos_y     = pad_1d([b["pos_y"]     for b in batch], 0)
-    # causal mask is created inside the model; here we build an attention key padding mask:
-    attn_pad_mask = (input_ids == pad_id)  # [B, L], True where padding
+    attn_pad_mask = (input_ids == pad_id)
     return input_ids, labels, pos_x, pos_y, attn_pad_mask
 
 
-# ------------------------------------------
-# 3) TwoD positional encoding (learned)
-# ------------------------------------------
+
+# ***** CORE COMPONENT OF THIS FILE *****
+#
+# TwoDPositionalEncoding = learned embeddings for x and y, added together.
+#
+#   pe(i) = ex[pos_x(i)] + ey[pos_y(i)]
+#
+# => this injects 2D structure directly into the sequence.
 class TwoDPositionalEncoding(nn.Module):
     """
-    pos2d(i) = Ex[ px[i] ] + Ey[ py[i] ]
-    with 0 reserved for padding (embedding(0) = 0 vector).
+    2D learned embeddings:
+        - ex[k] encodes column-coordinate k
+        - ey[k] encodes row-coordinate k
+        - pos_x==0 / pos_y==0 => padding => embedding = 0
     """
-    def __init__(self, d_model: int, max_x: int, max_y: int):
+
+    def __init__(self, d_model, max_x, max_y):
         super().__init__()
-        self.ex = nn.Embedding(max_x + 1, d_model)  # index 0 = pad
+
+        # allocate one extra for index 0 = padding
+        self.ex = nn.Embedding(max_x + 1, d_model)
         self.ey = nn.Embedding(max_y + 1, d_model)
-        # initialize padding row to zeros
+
+        # enforce padding row = 0
         with torch.no_grad():
             self.ex.weight[0].zero_()
             self.ey.weight[0].zero_()
 
-    def forward(self, pos_x: torch.Tensor, pos_y: torch.Tensor) -> torch.Tensor:
-        return self.ex(pos_x) + self.ey(pos_y)  # [B, L, d]
+    def forward(self, pos_x, pos_y):
+        # Core: 2D pos embedding happens RIGHT HERE
+        return self.ex(pos_x) + self.ey(pos_y)
 
 
-# ------------------------------------------
-# 4) A tiny GPT-style Transformer (encoder-only)
-# ------------------------------------------
+# GPT-style transformer with 2D positional encoding.
+# => This is what we actually keep long term.
 class CausalTransformer2DPE(nn.Module):
-    def __init__(self, vocab_size: int, d_model=256, n_heads=4, n_layers=4,
+    def __init__(self, vocab_size, d_model=256, n_heads=4, n_layers=4,
                  max_x=128, max_y=128, dropout=0.1):
         super().__init__()
+
+        # token -> vector embedding
         self.tok = nn.Embedding(vocab_size, d_model)
+
+        # *** Important: add 2D positional encoding layer ****
         self.pos2d = TwoDPositionalEncoding(d_model, max_x, max_y)
 
-        # store extents for generation-time wrapping
         self.max_x = max_x
         self.max_y = max_y
 
-        encoder_layer = nn.TransformerEncoderLayer(
+        # Transformer stack
+        layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=n_heads,
             dim_feedforward=4 * d_model,
             dropout=dropout,
-            batch_first=True,   # [B, L, d]
+            batch_first=True,
             activation="gelu",
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.encoder = nn.TransformerEncoder(layer, num_layers=n_layers)
 
         self.ln = nn.LayerNorm(d_model)
         self.out = nn.Linear(d_model, vocab_size)
-        self.d_model = d_model
 
-    def _causal_mask(self, L: int, device) -> torch.Tensor:
-        # [L, L] bool mask: True means "mask out"
+    def _causal_mask(self, L, device):
         return torch.triu(torch.ones((L, L), device=device, dtype=torch.bool), diagonal=1)
 
     def forward(self, input_ids, pos_x, pos_y, key_padding_mask=None, targets=None):
         """
-        input_ids: [B, L]
-        pos_x, pos_y: [B, L] (0 is padding)
-        key_padding_mask: [B, L] (True where pad)
-        targets: [B, L] or None
+        forward pass with:
+        x = tok_emb + 2D_pos_emb
         """
+
         B, L = input_ids.size()
-        x = self.tok(input_ids) + self.pos2d(pos_x, pos_y)  # [B, L, d]
 
-        # causal mask for self-attention (Transformer API wants shape [L, L])
-        causal = self._causal_mask(L, x.device)  # True above diagonal = masked
+        # ----- core injection of 2D structure -----
+        x = self.tok(input_ids) + self.pos2d(pos_x, pos_y)
 
-        # GPT-style: encoder with causal mask + padding mask
+        causal = self._causal_mask(L, x.device)
+
         h = self.encoder(
             x,
-            mask=causal,                        # [L, L]
-            src_key_padding_mask=key_padding_mask  # [B, L], True where pad
-        )  # [B, L, d]
+            mask=causal,
+            src_key_padding_mask=key_padding_mask,
+        )
 
         h = self.ln(h)
-        logits = self.out(h)  # [B, L, V]
+        logits = self.out(h)
 
         loss = None
         if targets is not None:
@@ -212,17 +224,12 @@ class CausalTransformer2DPE(nn.Module):
             )
         return logits, loss
 
+    # Greedy generation: demo logic only.
+    # Replace this with our real generation pipeline later.
     @torch.no_grad()
     def generate(self, input_ids, pos_x, pos_y,
                  max_new_tokens=50, eos_id=None, pad_id=None):
-        """
-        Greedy decoding that *extends* (pos_x, pos_y) row-major, but keeps
-        indices within [1..max_x] and [1..max_y] to avoid out-of-range errors.
 
-        Policy:
-        - If last_px < max_x: (px+1, same py)
-        - If last_px == max_x: (1, min(py+1, max_y))
-        """
         self.eval()
         B, L = input_ids.size()
         device = input_ids.device
@@ -231,33 +238,26 @@ class CausalTransformer2DPE(nn.Module):
         px = pos_x.clone()
         py = pos_y.clone()
 
-        if pad_id is None:
-            pad_id = 0  # default assumption if not given
+        if pad_id is None: pad_id = 0
 
         for _ in range(max_new_tokens):
-            # Build masks and forward
-            pad_mask = (out_ids == pad_id)  # [B, L]
+            pad_mask = (out_ids == pad_id)
             logits, _ = self.forward(out_ids, px, py,
-                                     key_padding_mask=pad_mask,
-                                     targets=None)
-            next_id = logits[:, -1, :].argmax(dim=-1)  # greedy
+                                     key_padding_mask=pad_mask)
+            next_id = logits[:, -1].argmax(dim=-1)
+
             out_ids = torch.cat([out_ids, next_id.unsqueeze(1)], dim=1)
 
-            # Update 2D coords with wrapping
+            # update coordinates (simple row-major wrap)
             last_px = px[:, -1]
             last_py = py[:, -1]
 
-            # bool mask: True where we are at end of row
             wrap_row = (last_px == self.max_x)
 
-            # new_px: increment, but wrap to 1 when last_px == max_x
-            new_px = last_px + 1
-            new_px = torch.where(wrap_row, torch.ones_like(new_px), new_px)
-
-            # new_py: same row, except when wrapping; then increment but clamp at max_y
-            new_py = last_py
-            inc_py = torch.clamp(last_py + 1, max=self.max_y)
-            new_py = torch.where(wrap_row, inc_py, new_py)
+            new_px = torch.where(wrap_row, torch.ones_like(last_px), last_px + 1)
+            new_py = torch.where(wrap_row,
+                                 torch.clamp(last_py + 1, max=self.max_y),
+                                 last_py)
 
             px = torch.cat([px, new_px.unsqueeze(1)], dim=1)
             py = torch.cat([py, new_py.unsqueeze(1)], dim=1)
@@ -268,39 +268,36 @@ class CausalTransformer2DPE(nn.Module):
         return out_ids
 
 
-# ------------------------------------------
-# 5) Tiny demo: make data, train, infer
-# ------------------------------------------
+# Training demo: again filler logic.
+# => Replace with our proper pipeline.
 @dataclass
 class TrainConfig:
-    d_model: int = 192
-    n_heads: int = 4
-    n_layers: int = 3
-    batch_size: int = 8
-    lr: float = 3e-4
-    steps: int = 300
-    device: str = "cpu"  # "mps" works on Apple Silicon for many ops if you want
+    d_model=192
+    n_heads=4
+    n_layers=3
+    batch_size=8
+    lr=3e-4
+    steps=300
+    device="cpu"   # mps/cuda if available
 
 
-def make_toy_grids(n=100, rows=3, cols=4) -> List[List[List[str]]]:
-    grids = []
-    for k in range(n):
-        grid = [[f"T{k}_r{r}_c{c}" for c in range(cols)] for r in range(rows)]
-        grids.append(grid)
-    return grids
+# Synthetic 2D toy grids (demo only)
+def make_toy_grids(n=100, rows=3, cols=4):
+    return [[[f"T{k}_r{r}_c{c}" for c in range(cols)] for r in range(rows)]
+            for k in range(n)]
 
 
 def main():
-    # 1) Build toy data
+    # -------- BUILD TOY DATA (replace later) --------
     vocab = SimpleVocab()
     train_grids = make_toy_grids(n=200, rows=3, cols=4)
     ds = GridLMExample(train_grids, vocab)
 
-    # 2) DataLoader
-    collate = lambda batch: collate_batch(batch, pad_id=vocab.pad_id)
-    dl = DataLoader(ds, batch_size=TrainConfig.batch_size, shuffle=True, collate_fn=collate)
+    collate = lambda batch: collate_batch(batch, vocab.pad_id)
+    dl = DataLoader(ds, batch_size=TrainConfig.batch_size,
+                    shuffle=True, collate_fn=collate)
 
-    # 3) Model
+    # -------- CREATE MODEL (keep this part) --------
     model = CausalTransformer2DPE(
         vocab_size=vocab.size,
         d_model=TrainConfig.d_model,
@@ -312,11 +309,12 @@ def main():
 
     opt = torch.optim.AdamW(model.parameters(), lr=TrainConfig.lr)
 
-    # 4) Train a few steps
+    # -------- TRAINING LOOP (demo only) --------
     model.train()
     step = 0
     for epoch in range(9999):
         for input_ids, labels, pos_x, pos_y, pad_mask in dl:
+
             input_ids = input_ids.to(TrainConfig.device)
             labels    = labels.to(TrainConfig.device)
             pos_x     = pos_x.to(TrainConfig.device)
@@ -326,6 +324,7 @@ def main():
             _, loss = model(input_ids, pos_x, pos_y,
                             key_padding_mask=pad_mask,
                             targets=labels)
+
             opt.zero_grad(set_to_none=True)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -339,22 +338,19 @@ def main():
         if step >= TrainConfig.steps:
             break
 
-    # 5) Greedy generation demo
+    # -------- GENERATION DEMO (also filler) --------
     model.eval()
     with torch.no_grad():
-        sample = ds[0]
-        input_ids = sample["input_ids"].unsqueeze(0).to(TrainConfig.device)
-        pos_x     = sample["pos_x"].unsqueeze(0).to(TrainConfig.device)
-        pos_y     = sample["pos_y"].unsqueeze(0).to(TrainConfig.device)
-
+        s = ds[0]
         out = model.generate(
-            input_ids[:, :8],
-            pos_x[:, :8],
-            pos_y[:, :8],
+            s["input_ids"].unsqueeze(0)[:, :8].to(TrainConfig.device),
+            s["pos_x"].unsqueeze(0)[:, :8].to(TrainConfig.device),
+            s["pos_y"].unsqueeze(0)[:, :8].to(TrainConfig.device),
             max_new_tokens=10,
             eos_id=vocab.eos_id,
             pad_id=vocab.pad_id,
         )
+
         print("Generated IDs:", out[0].tolist())
         print("Generated tokens:", vocab.decode(out[0].tolist()))
 
