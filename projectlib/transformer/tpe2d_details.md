@@ -1,42 +1,43 @@
-The paper doesn't actually build a “2D embedding vector” in the usual sense. Instead they reuse vanilla 1D RoPE several times on different 1D traversals of the table, and then let each attention head route itself to the traversal it finds most useful. 
+The paper doesn't actually build a “2D embedding vector” in the usual sense. Instead they reuse vanilla 1D RoPE several times on different 1D traversals of the table, and then let each attention head route itself to the traversal it finds most useful.
 
 Step by step implementation written (mostly) by ChatGPT and verified by me.
 
+---
 
 ## 1. Recap: what RoPE is doing (§3.1)
 
 Standard (1D) RoPE works like this: for a sequence of tokens
-\(x_1, \dots, x_M\), an attention head \(h\) has queries, keys, values
+\((x_1, \dots, x_M)\), an attention head \(h\) has queries, keys, values
 \(q_m^h, k_n^h, v_n^h \in \mathbb{R}^d\).
 
 Causal self-attention output for head \(h\) and token \(m\) is
 
-\[
+$$
 o_m^h = \sum_{n \le m} a_{m,n}^h \, v_n^h,
-\]
+$$
 
 with
 
-\[
+$$
 a_{m,n}^h =
 \frac{\exp\big(f(q_m^h, k_n^h)\big)}
      {\sum_{j \le m} \exp\big(f(q_m^h, k_j^h)\big)}.
-\]
+$$
 
 RoPE defines
 
-\[
+$$
 f(q_m^h, k_n^h)
 = (q_m^h)^\top R_{b,d}^{\,n-m} k_n^h,
-\]
+$$
 
 where \(R_{b,d}^m \in \mathbb{R}^{d \times d}\) is a block-diagonal
 rotation matrix; each 2-dim subspace is rotated by angle
 \(m \, \theta_{b,d,i}\) (with different frequencies per block).
 
 Key property: the attention score depends only on the relative offset
-\(n - m\), but you can implement it by rotating queries/keys according to
-absolute position indices.
+\((n - m)\), but you can implement it by rotating queries/keys according
+to absolute position indices.
 
 So in plain 1D RoPE you assign a single scalar position index \(m\) per
 token, and then use that index to build the rotation.
@@ -53,17 +54,17 @@ The paper’s setting: input is
 
 They concatenate those into a single token sequence
 
-\[
+$$
 X = (x_1, x_2, \dots, x_M).
-\]
+$$
 
 Then instead of a single position index per token, they assign a vector
 of indices
 
-\[
-P = (p_1, \dots, p_M), \quad
+$$
+P = (p_1, \dots, p_M), \qquad
 p_m = (p_{m,1}, \dots, p_{m,J}),
-\]
+$$
 
 where \(p_{m,j}\) is the position index of token \(x_m\) under
 permutation order \(j\).
@@ -105,8 +106,7 @@ So the whole 2D-ness is in how you assign these index vectors \(p_m\).
 Given:
 
 - token sequence \(X\),
-- per-token index vectors
-  \(p_m = (p_{m,1}, \dots, p_{m,J})\),
+- per-token index vectors \(p_m = (p_{m,1}, \dots, p_{m,J})\),
 
 they modify each self-attention layer like this.
 
@@ -115,9 +115,9 @@ they modify each self-attention layer like this.
 For a head \(h\) and token \(x_m\), instead of one attention output they
 compute one attention output per permutation order, then mix them:
 
-\[
+$$
 o_m^h = \sum_{j=1}^J r_{m,j}^h \, o_{m,j}^h. \tag{7}
-\]
+$$
 
 Here:
 
@@ -128,29 +128,29 @@ Here:
 
 The routing weights come from a small MLP router per head:
 
-\[
-r_{m,j}^h = \mathrm{Softmax}(\mathrm{MLP}(h_m^h))_j, \tag{8}
-\]
+$$
+r_{m,j}^h = \operatorname{Softmax}(\operatorname{MLP}(h_m^h))_j, \tag{8}
+$$
 
 where \(h_m\) is the hidden state at that layer and \(h_m^h\) is the
 slice for head \(h\).
 
 Router MLP is LLaMA-style gated FFN:
 
-\[
-\mathrm{MLP}(h_m^h)
-= W_\text{down} \big(
-    \mathrm{SiLU}(W_\text{up} \, h_m^h)
+$$
+\operatorname{MLP}(h_m^h)
+= W_\text{down} \Big(
+    \operatorname{SiLU}(W_\text{up} \, h_m^h)
     \odot
     (W_\text{gate} \, h_m^h)
-  \big),
-\]
+  \Big),
+$$
 
 with
 
-- \(W_\text{up} \in \mathbb{R}^{4d \times d}\),
+- \(W_\text{up}   \in \mathbb{R}^{4d \times d}\),
 - \(W_\text{gate} \in \mathbb{R}^{4d \times d}\),
-- \(W_\text{down} \in \mathbb{R}^{J \times 4d}\).
+- \(W_\text{down} \in \mathbb{R}^{J   \times 4d}\).
 
 So per (head, token) you get a length-\(J\) logit vector, softmax it →
 routing distribution.
@@ -164,20 +164,20 @@ For a given order \(j\), you just do standard causal attention with 1D
 RoPE, but using position indices \(p_{m,j}\) instead of plain sequence
 indices:
 
-\[
+$$
 o_{m,j}^h =
-\sum_{p_{n,j} \le p_{m,j}} a_{m,n,j}^h \, v_n^h, \tag{10}
-\]
+\sum_{p_{n,j} \le p_{m,j}} a_{m,n,j}^h \, v_n^h. \tag{10}
+$$
 
 with
 
-\[
+$$
 a_{m,n,j}^h =
 \frac{\exp\big((q_m^h)^\top R_{b,d}^{\,p_{n,j} - p_{m,j}} k_n^h\big)}
      {\sum_{p_{i,j} \le p_{m,j}}
         \exp\big((q_m^h)^\top R_{b,d}^{\,p_{i,j} - p_{m,j}} k_i^h\big)}.
 \tag{11}
-\]
+$$
 
 Key points:
 
@@ -186,11 +186,11 @@ Key points:
 - **Causal mask in order \(j\)**: token with index \(p_{m,j}\) can
   attend only to tokens with index \(p_{n,j} \le p_{m,j}\). So causality
   is defined along that permutation’s linearization.
-- Because the sequence order of \(X\) itself is “inessential” (they say
-  this explicitly), they re-rank Q/K/V by increasing \(p_{m,j}\) before
-  computing attention, so the causal mask is the usual lower-triangular
-  mask in that order. After attention, you map outputs back to the
-  original token order.
+- Because the sequence order of \(X\) itself is “inessential”
+  (they say this explicitly), they re-rank Q/K/V by increasing
+  \(p_{m,j}\) before computing attention, so the causal mask is the
+  usual lower-triangular mask in that order. After attention, you map
+  outputs back to the original token order.
 
 So for each permutation order:
 
@@ -244,9 +244,9 @@ So effectively:
 
 The base loss is standard language modeling loss on the answer:
 
-\[
+$$
 L_\text{nll} = -\log P(A \mid Q, T). \tag{12}
-\]
+$$
 
 But if you only use that, router distributions \(r_{m,j}^h\) could stay
 diffuse (all permutation orders mixed equally), which makes the model
@@ -254,21 +254,21 @@ harder to interpret and possibly inefficient.
 
 So they add an entropy regularization term on the router distributions:
 
-\[
+$$
 E_m^h = -\sum_{j=1}^J r_{m,j}^h \log r_{m,j}^h,
-\]
+$$
 
-\[
+$$
 L_\text{ent}
 = \frac{1}{M H} \sum_{m=1}^M \sum_{h=1}^H E_m^h.
 \tag{13–14}
-\]
+$$
 
 Total loss:
 
-\[
+$$
 L = L_\text{nll} + \lambda \, L_\text{ent}. \tag{15}
-\]
+$$
 
 They minimize \(L_\text{ent}\), thus pushing \(r_{m,\cdot}^h\) towards
 low-entropy distributions — ideally each head+token strongly prefers one
