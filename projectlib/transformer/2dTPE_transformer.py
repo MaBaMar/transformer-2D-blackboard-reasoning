@@ -20,6 +20,10 @@
 #
 # ------------------------------------------------------------
 
+# NOTE: Entropy regularization is missing.
+# NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
+
+
 import math
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Callable
@@ -432,6 +436,7 @@ class TwoDTPERoPEAttention(nn.Module):
         out = out_heads.transpose(1, 2).contiguous().view(B, L, self.d_model)
         out = self.o_proj(out)  # [B,L,D_model]
         return out
+
 
 
 # -------------------------------------------------------------------
