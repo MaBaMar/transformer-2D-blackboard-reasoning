@@ -18,15 +18,17 @@
 # Warning: For use with the dedicated blackboard models only!
 # ------------------------------------------------------------
 
+import copy
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional, List
-import torch
-import numpy as np
-import copy
 
+import numpy as np
+import torch
 from torch.types import Number
-from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
+from tqdm import tqdm
+
 from projectlib.my_datasets._blackboard_operands import Addition, CarryOperation
+from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
 
 @dataclass
 class BlackboardSpec:
@@ -202,9 +204,6 @@ class BasicOpBlackboardIterator:
 
         # we generate the input and output states, as well as `num_digits` intermediate states
         if self.step == self.oplen + 2:
-            return self.eos_frame
-
-        if self.step == self.oplen + 3:
             raise StopIteration
 
         # current operation frame is what we output
@@ -229,7 +228,7 @@ class BasicOpBlackboardIterator:
         self.curr_operation_frame: list[list[str]] = [
             2*[BB_EMPTY_TOKEN] + [str(x) for x in self.operand1],                       # operand1 line
             [str(self.operation), BB_EMPTY_TOKEN] + [str(x) for x in self.operand2],    # operand2 line
-            [BB_EMPTY_TOKEN]+(self.oplen+1)*[BB_FILL_NUM_TOKEN],                        # carry line
+            [BB_EMPTY_TOKEN]+(self.oplen)*[BB_FILL_NUM_TOKEN]+[BB_EMPTY_TOKEN],         # carry line
             (self.oplen+2) * [BB_OPLINE_SEG_TOKEN],                                     # result separator line
             [BB_EMPTY_TOKEN]+[BB_FILL_NUM_TOKEN]*(self.oplen+1)                         # result line
         ]
@@ -260,11 +259,10 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 
         # generate data
         super().__init__(
-            path,
-            None,
-            regenerate,
-            generation_spec,
-            train = train,
+            path=path,
+            regenerate=regenerate,
+            generation_spec=generation_spec,
+            train=train,
         )
 
 
@@ -272,7 +270,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         inputs = []
         labels = []
 
-        for _ in range(spec.size):
+        for _ in tqdm(range(spec.size)):
             # size is interpreted as the number of blackboard computation chains to generate
             a = torch.randint(spec.low, spec.high, (1,)).item()
             b = torch.randint(spec.low, spec.high, (1,)).item()
@@ -299,7 +297,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
     def _generate_blackboard_pairs(self, a: Number, b: Number) -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
 
         # perform hand addition or subtraction and store the digit steps in lists
-        max_input_length = max(np.floor(np.log10(a)).astype(np.int32), np.floor(np.log10(b)).astype(np.int32))
+        max_input_length = max(np.ceil(np.log10(a)).astype(np.int32), np.ceil(np.log10(b)).astype(np.int32))
 
         digits_a = np.empty(max_input_length, dtype=int)
         digits_b = np.empty(max_input_length, dtype=int)
@@ -333,13 +331,18 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         for i, opframe in enumerate(opframe_generator):
 
             # extend the blackboard to its full size
-            blackboard = torch.empty((self.bb_spec.width, self.bb_spec.height), dtype=torch.long)
-            torch.fill(blackboard, self.bb_2D_tokenizer.empty_id)
-            blackboard[p_y:p_y + opframe_generator.frame_height, p_x:p_x + opframe_generator.frame_width] = torch.tensor(opframe)
+            blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.empty_id, dtype=torch.long)
+            blackboard[p_y:p_y + opframe_generator.frame_height, p_x:p_x + opframe_generator.frame_width] = self.bb_2D_tokenizer.encode(opframe)
 
             blackboard[0, 0] = self.bb_2D_tokenizer.bos_id
 
             bb_chain.append(blackboard)
+
+        # add EOS blackboard
+        blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.pad_id, dtype=torch.long)
+        blackboard[0, 0] = self.bb_2D_tokenizer.bos_id
+        blackboard[0, 1] = self.bb_2D_tokenizer.eos_id
+        bb_chain.append(blackboard)
 
         # Note: we need copies for the label to avoid aliasing
         return self._pack_to_input_format(bb_chain[:-1]), self._pack_to_input_format(bb_chain[1:], copy=True)
@@ -351,7 +354,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         return [{
             "tokens": bb.clone() if copy else bb,
             "pos_row": torch.arange(H*W),
-            "pos_col": torch.arange(H*W).unsqueeze(0).expand(H, W).T.flatten()
+            "pos_col": torch.arange(H*W).view(H, W).T.flatten()
         } for bb in bbs]
 
 
@@ -370,10 +373,7 @@ def bb_prettyprint(board: torch.Tensor):
     """
     tok = BBVocabTokenizer()
 
-    assert board.shape[0] == board.shape[1], "Board must be square"
-
     decoded_board = tok.decode(board)
-    print(board.shape[1] * "-")
     for i in range(len(decoded_board)):
         line = '|'
         for j in range(len(decoded_board[i])):
@@ -387,9 +387,8 @@ def bb_prettyprint(board: torch.Tensor):
                 line += ' '
             else:
                 line += decoded_board[i][j]
-            print(line, end='')
         print(line+'|')
-    print(board.shape[1] * "-")
+    print((board.shape[1]+2) * "-")
 
 
 def bb_datasample_prettyprint(sample: Dict[str, torch.Tensor]):

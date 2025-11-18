@@ -60,7 +60,7 @@ class Subtraction(CarryOperation):
         return "-"
 
     def get_name(self) -> str:
-        return "-"
+        return "subtraction"
 
     def finalize_carry(self, carry: int) -> str:
         if carry:
