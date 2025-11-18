@@ -24,15 +24,9 @@
 # NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
 
-import math
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional, Callable
-
+from typing import List, Dict, Tuple, Optional
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-
+from torch.utils.data import Dataset
 
 # -------------------------------------------------------------------
 # Simple vocab (demo)

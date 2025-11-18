@@ -25,13 +25,11 @@
 
 
 import math
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional, Callable
+from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 
 
 # -------------------------------------------------------------------
@@ -401,7 +399,6 @@ class CausalTransformer2DTPE(nn.Module):
         key_padding_mask: [B,L] (True where padded)
         targets: [B,L] or None
         """
-        B, L = input_ids.shape
 
         x = self.tok_emb(input_ids) * math.sqrt(self.d_model)
         x = self.drop(x)
