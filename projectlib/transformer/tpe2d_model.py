@@ -36,26 +36,85 @@ import torch.nn.functional as F
 # RoPE utilities
 # -------------------------------------------------------------------
 
-def build_rope_cache(
-    head_dim: int,
-    max_position: int,
-    device: torch.device,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+class RoPECache(nn.Module):
     """
-    Build cos/sin caches for RoPE:
-        cos, sin: [1, 1, max_position, head_dim]
+    Cache cos/sin tables for RoPE as buffers, similar in spirit to
+    LLaMA's rotary embedding implementation.
+
+    Produces cos, sin of shape [1, 1, max_position, head_dim].
     """
-    # half-dim frequencies
-    theta = torch.arange(0, head_dim, 2, device=device, dtype=torch.float32)
-    theta = 1.0 / (10000 ** (theta / head_dim))  # [head_dim/2]
 
-    seq_pos = torch.arange(max_position, device=device, dtype=torch.float32)  # [max_position]
-    freqs = torch.einsum("i,j->ij", seq_pos, theta)  # [max_position, head_dim/2]
+    def __init__(
+        self,
+        head_dim: int,
+        base: float = 10000.0,
+        max_position_embeddings: int = 2048,
+        device: Optional[torch.device] = None,
+    ) -> None:
+        super().__init__()
+        self.head_dim = head_dim
+        self.base = base
+        self.max_seq_len_cached: int = 0
 
-    emb = torch.cat([freqs, freqs], dim=-1)  # [max_position, head_dim]
-    cos = emb.cos().unsqueeze(0).unsqueeze(0)  # [1,1,max_position,head_dim]
-    sin = emb.sin().unsqueeze(0).unsqueeze(0)
-    return cos, sin
+        # inverse frequencies (never change)
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, head_dim, 2, dtype=torch.float32, device=device) / head_dim)
+        )
+        # non-trainable, moves with the module on .to(...)
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        # placeholders for caches; remain registered buffers even when reassigned
+        self.register_buffer("cos_cached", torch.empty(0), persistent=False)
+        self.register_buffer("sin_cached", torch.empty(0), persistent=False)
+
+        # build an initial cache; will be extended on demand
+        if max_position_embeddings > 0:
+            self._set_cos_sin_cache(
+                max_position=max_position_embeddings,
+                dtype=torch.get_default_dtype(),
+            )
+
+    def _set_cos_sin_cache(
+        self,
+        max_position: int,
+        dtype: torch.dtype,
+    ) -> None:
+        # always build on the same device as inv_freq
+        device = self.inv_freq.device
+        self.max_seq_len_cached = max_position
+
+        # positions 0, 1, ..., max_position-1
+        t = torch.arange(max_position, device=device, dtype=self.inv_freq.dtype)  # [max_position]
+        # couldn't get rid of type problems here
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # [max_position, head_dim/2]
+        emb = torch.cat([freqs, freqs], dim=-1)            # [max_position, head_dim]
+
+        cos = emb.cos()[None, None, :, :].to(dtype)        # [1,1,max_position,head_dim]
+        sin = emb.sin()[None, None, :, :].to(dtype)
+
+        # update the registered buffers
+        self.cos_cached = cos
+        self.sin_cached = sin
+
+    def forward(
+        self,
+        max_position: int,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Ensure cache covers [0, ..., max_position-1] and return cos/sin slices.
+        """
+        if max_position > self.max_seq_len_cached:
+            self._set_cos_sin_cache(
+                max_position=max_position,
+                dtype=dtype,
+            )
+
+        # slice to requested range and match dtype/device
+        cos = self.cos_cached[:, :, :max_position, :].to(device=device, dtype=dtype)
+        sin = self.sin_cached[:, :, :max_position, :].to(device=device, dtype=dtype)
+        return cos, sin
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -151,6 +210,12 @@ class TwoDTPERoPEAttention(nn.Module):
         self.router_up = nn.Linear(self.head_dim, router_hidden)
         self.router_down = nn.Linear(router_hidden, 2)  # 2 orders: row & col
 
+        # RoPE cache shared by all heads in this attention layer
+        self.rope_cache = RoPECache(
+            head_dim=self.head_dim,
+            max_position_embeddings=512,  # can grow on demand
+        )
+
     def _attend_with_order(
         self,
         q: torch.Tensor,
@@ -244,17 +309,18 @@ class TwoDTPERoPEAttention(nn.Module):
         k = k.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
 
-        # build RoPE cache up to max position we see in either order
+        # build / reuse RoPE cache up to max position we see in either order
         max_pos = int(
             max(
                 pos_row.max().item(),
                 pos_col.max().item(),
             )
         ) + 1
-        cos, sin = build_rope_cache(
-            head_dim=self.head_dim,
+
+        cos, sin = self.rope_cache(
             max_position=max_pos,
             device=device,
+            dtype=q.dtype,
         )
 
         # Apply RoPE for row order
@@ -427,7 +493,7 @@ class CausalTransformer2DTPE(nn.Module):
     def generate(
         self,
         input_ids: torch.Tensor,
-        pos_row: torch.Tensor, 
+        pos_row: torch.Tensor,
         pos_col: torch.Tensor,
         max_new_tokens: int,
         eos_id: Optional[int] = None,
