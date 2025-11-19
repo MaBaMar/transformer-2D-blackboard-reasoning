@@ -3,16 +3,17 @@ Function for dataset generation. Feel free to define new functions here and to u
 Please regularly push updated versions of the library, so others can use the same functionality.
 """
 import argparse
+from typing import TypeAlias
 
-from transformers import AutoTokenizer
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, AutoTokenizer
 
 from projectlib.my_datasets.base import GenerationSpec
 from projectlib.my_datasets.additions import AdditionDataset
 from projectlib.my_datasets.scratchpads import ScratchpadDataset
-from projectlib.my_datasets.blackboards import BasicOpBlackboardDataset, BlackboardSpec, BB_PAD_TOKEN, BB_ROW_SEP_TOKEN
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, BlackboardSpec
 from projectlib.my_datasets._blackboard_operands import *
 
-
+TokenizerType: TypeAlias = PreTrainedTokenizer | PreTrainedTokenizerFast
 
 TRAIN_SIZE = 10000
 EVAL_SIZE = 1000
@@ -41,7 +42,7 @@ TOKENIZERS = {
 #
 
 
-def generate_addition(digits: int, low: int, high: int, tokenizer: AutoTokenizer=None):
+def generate_addition(digits: int, low: int, high: int, tokenizer: TokenizerType | None = None):
     AdditionDataset(
         path=EVAL_PATH_BASE.format(f"addition_{digits}"),
         tokenizer=tokenizer,
@@ -52,7 +53,7 @@ def generate_addition(digits: int, low: int, high: int, tokenizer: AutoTokenizer
     )
 
 
-def generate_scratchpad(digits: int, low: int, high: int, tokenizer: AutoTokenizer=None):
+def generate_scratchpad(digits: int, low: int, high: int, tokenizer: TokenizerType | None = None):
     ScratchpadDataset(
         path=EVAL_PATH_BASE.format(f"scratchpad_{digits}"),
         tokenizer=tokenizer,
@@ -63,9 +64,7 @@ def generate_scratchpad(digits: int, low: int, high: int, tokenizer: AutoTokeniz
     )
 
 
-def generate_blackboard(digits: int, low: int, high: int, tokenizer: AutoTokenizer=None):
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    tokenizer.add_special_tokens({'pad_token': BB_PAD_TOKEN, 'sep_token': BB_ROW_SEP_TOKEN})
+def generate_blackboard(digits: int, low: int, high: int, additional_tokens: list[str] | None = None):
 
     bb_spec = BlackboardSpec(
         height=BB_HEIGHT,
@@ -76,22 +75,22 @@ def generate_blackboard(digits: int, low: int, high: int, tokenizer: AutoTokeniz
 
     name = f"bb_{bb_spec.operation.get_name()}_{digits}"
 
-    BasicOpBlackboardDataset(
+    TokenizedBlackboardDataset(
         path=TRAIN_PATH_BASE.format(name),
-        tokenizer=tokenizer,
         regenerate=REGENERATE,
         train=True,
         generation_spec=GenerationSpec(TRAIN_SIZE, low, high),
         blackboard_spec=bb_spec,
+        additional_tokens=additional_tokens,
     )
 
-    BasicOpBlackboardDataset(
+    TokenizedBlackboardDataset(
         path=EVAL_PATH_BASE.format(name),
-        tokenizer=tokenizer,
         regenerate=REGENERATE,
         train=False,
         generation_spec=GenerationSpec(EVAL_SIZE, low, high),
         blackboard_spec=bb_spec,
+        additional_tokens=additional_tokens,
     )
 
 
@@ -110,7 +109,7 @@ def main(digits: int, tokenizer_name: str):
 
     generate_addition(digits, low, high, tokenizer=tokenizer)
     generate_scratchpad(digits, low, high, tokenizer=tokenizer)
-    generate_blackboard(digits, low, high, tokenizer=None)
+    generate_blackboard(digits, low, high)
 
 
 if __name__ == "__main__":

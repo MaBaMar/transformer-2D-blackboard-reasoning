@@ -250,12 +250,12 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
-        additional_tokens: List[str] = []
+        additional_tokens: List[str] | None = None
     ):
         path = path or (TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name()) if train else EVAL_PATH_BASE.format(blackboard_spec.operation.get_name()))
 
         self.bb_spec = blackboard_spec
-        self.bb_2D_tokenizer = BBVocabTokenizer(additional_tokens)
+        self.bb_2D_tokenizer = BBVocabTokenizer(additional_tokens or [])
 
         # generate data
         super().__init__(
@@ -270,6 +270,8 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         inputs = []
         labels = []
 
+        print(40*"_")
+        print("[blackboards.py] Starting data generation")
         for _ in tqdm(range(spec.size)):
             # size is interpreted as the number of blackboard computation chains to generate
             a = torch.randint(spec.low, spec.high, (1,)).item()
@@ -282,7 +284,8 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             inputs += input_states
             labels += output_states
 
-        print("[Datagen] Generated", spec.size, "blackboard chains consisting of", len(inputs)+1, "blackboards")
+        print("[blackboards.py] Generated", spec.size, "blackboard chains encoded in", len(inputs), "data samples")
+        print(40*"_")
 
         return inputs, labels
 
