@@ -11,6 +11,7 @@
 import os
 import pytest
 import torch
+from torch.utils.data import DataLoader
 
 from projectlib.my_datasets._blackboard_operands import Addition, Subtraction
 from projectlib.my_datasets.blackboards import (
@@ -18,8 +19,9 @@ from projectlib.my_datasets.blackboards import (
     GenerationSpec,
     TokenizedBlackboardDataset,
     bb_prettyprint,
-    bb_datasample_prettyprint
 )
+
+from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
 
 # --- 1. Fixtures for Setup and Shared Data ---
 
@@ -69,12 +71,13 @@ def test_addition_board_sequence(setup_data_tmp_path, gen_spec, test_chain_data_
         blackboard_spec=bb_spec,
     )
 
-    for i, (x, y) in enumerate(dataset):
+    dl = DataLoader(dataset, batch_size=1, shuffle=False)
+    for i, (x,y) in enumerate(dl):
         t_x = dataset.bb_2D_tokenizer.encode(test_chain_data_add[i])
         t_y = dataset.bb_2D_tokenizer.encode(test_chain_data_add[i+1])
 
-        assert torch.equal(x['tokens'], t_x), f"Failed at sample {i}: Expected\n{t_x},\ngot\n{x['tokens']}"
-        assert torch.equal(y['tokens'], t_y), f"Failed at sample {i}: Expected\n{t_y},\ngot\n{y['tokens']}"
+        assert torch.equal(x['tokens'][0], t_x), f"Failed at sample {i}: Expected\n{t_x},\ngot\n{x['tokens'][0]}"
+        assert torch.equal(y['tokens'][0], t_y), f"Failed at sample {i}: Expected\n{t_y},\ngot\n{y['tokens'][0]}"
 
 
 def test_subtraction_board_sequence(setup_data_tmp_path, gen_spec, test_chain_data_sub):
@@ -92,30 +95,34 @@ def test_subtraction_board_sequence(setup_data_tmp_path, gen_spec, test_chain_da
         blackboard_spec=bb_spec,
     )
 
-    for i, (x, y) in enumerate(dataset):
+    dl = DataLoader(dataset, batch_size=1, shuffle=False)
+    for i, (x, y) in enumerate(dl):
         t_x = dataset.bb_2D_tokenizer.encode(test_chain_data_sub[i])
         t_y = dataset.bb_2D_tokenizer.encode(test_chain_data_sub[i+1])
 
-        assert torch.equal(x['tokens'], t_x), f"Failed at sample {i}: Expected\n{t_x},\ngot\n{x['tokens']}"
-        assert torch.equal(y['tokens'], t_y), f"Failed at sample {i}: Expected\n{t_y},\ngot\n{y['tokens']}"
+        assert torch.equal(x['tokens'][0], t_x), f"Failed at sample {i}: Expected\n{t_x},\ngot\n{x['tokens'][0]}"
+        assert torch.equal(y['tokens'][0], t_y), f"Failed at sample {i}: Expected\n{t_y},\ngot\n{y['tokens'][0]}"
 
 
 if __name__ == "__main__":
-    # if we need debugging
-    torch.set_printoptions(linewidth=250)
     pytest.main()
 
+    run_tmp_path = "tmp_bb_subtraction.pl"
     # can add some visual testing of blackboard states
     dataset = TokenizedBlackboardDataset(
-        path=os.path.join("bb_subtraction.pl"),
+        path=os.path.join(run_tmp_path),
         regenerate=True, # Force regeneration for reliable testing
         generation_spec=GenerationSpec(size=1, low=10, high=99),
         blackboard_spec=BlackboardSpec(10, 10, True, Addition()),
     )
 
-    for i, (x, y) in enumerate(dataset):
+    dl = DataLoader(dataset, batch_size=1, shuffle=False)
+    for i, (x,y) in enumerate(dl):
         print("X:")
-        bb_prettyprint(x["tokens"])
+        bb_prettyprint(x["tokens"][0])
         print("Y:")
-        bb_prettyprint(y["tokens"])
+        bb_prettyprint(y["tokens"][0])
         print(40*"=")
+
+    # cleanup
+    os.remove(run_tmp_path)
