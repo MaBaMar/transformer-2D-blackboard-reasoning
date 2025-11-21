@@ -120,6 +120,24 @@ class RoPECache(nn.Module):
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
     """
     RoPE helper: rotate pairs (x0,x1) -> (-x1,x0)
+    There are two equivalent ways to implement rotary position embeddings.
+
+    (1) The paper's formulation views the last dim as interleaved pairs
+        (x_0, x_1), (x_2, x_3), … and rotates each pair using
+        x_even = x[..., 0::2], x_odd = x[..., 1::2].
+
+    (2) LLaMA / HuggingFace instead store the "real" and "imag" parts in
+        two contiguous halves:
+            cos/sin cache: emb = cat([freqs, freqs], dim=-1)
+        so that each complex pair is (x[..., :d/2], x[..., d/2:]).
+    
+    The function below implements (1). To implement (2), we would do:
+    d = x.shape[-1]
+    x1 = x[..., : d // 2]      # "real" part
+    x2 = x[..., d // 2 :]      # "imag" part
+    return torch.cat((-x2, x1), dim=-1)
+
+    NOTE: I am not sure yet which is more efficient in practice. -> Something we need to check
     """
     x1 = x[..., ::2]
     x2 = x[..., 1::2]
@@ -182,6 +200,9 @@ class TwoDTPERoPEAttention(nn.Module):
         router that gives us weights r_row, r_col for each
         (token, head).
     """
+
+    # Router MLP: per-head, per-token mixing between row/col.
+    # We apply it to a per-head slice of the input hidden state.
 
     def __init__(
         self,
@@ -337,13 +358,15 @@ class TwoDTPERoPEAttention(nn.Module):
         )  # [B,H,L,D]
 
         # router: per-head, per-token logits over {row, col}
-        # use q (before RoPE) as input
+        # use a per-head view of the *input hidden state* (before Q/K/V projections)
         # q: [B,H,L,D_head]
-        router_h = F.silu(self.router_up(q))            # [B,H,L,4*D_head]
-        router_logits = self.router_down(router_h)      # [B,H,L,2]
-        router_weights = F.softmax(router_logits, dim=-1)
+        router_in = hidden_states.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
 
-        w_row = router_weights[..., 0].unsqueeze(-1)    # [B,H,L,1]
+        router_h = F.silu(self.router_up(router_in))      # [B,H,L,4*D_head]
+        router_logits = self.router_down(router_h)        # [B,H,L,2]
+        router_weights = F.softmax(router_logits, dim=-1) # [B,H,L,2]
+
+        w_row = router_weights[..., 0].unsqueeze(-1)      # [B,H,L,1]
         w_col = router_weights[..., 1].unsqueeze(-1)
 
         out_heads = w_row * out_row + w_col * out_col   # [B,H,L,D_head]
