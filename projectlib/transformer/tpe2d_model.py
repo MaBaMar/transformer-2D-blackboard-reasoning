@@ -382,6 +382,11 @@ class TwoDTPERoPEAttention(nn.Module):
         return out
 
 
+# -------------------------------------------------------------------
+# TODO: Maybe we can remove everything after this line and move it to
+# TODO: the actual model implementations as it is no longer universal
+# -------------------------------------------------------------------
+
 
 # -------------------------------------------------------------------
 # Transformer block

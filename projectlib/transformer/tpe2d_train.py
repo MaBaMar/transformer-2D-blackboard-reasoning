@@ -23,8 +23,7 @@
 # NOTE: Entropy regularization is missing.
 # NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
-
-import math
+# TODO: move somewhere else, should not be in the library
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Callable
 

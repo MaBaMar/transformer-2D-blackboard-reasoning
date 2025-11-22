@@ -20,6 +20,8 @@
 #
 # ------------------------------------------------------------
 
+# TODO: delete file, no longer needed!
+
 # NOTE: Entropy regularization is missing.
 # NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
