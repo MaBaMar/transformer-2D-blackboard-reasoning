@@ -248,11 +248,6 @@ class Edgar(nn.Module):
         x_pos_col: torch.Tensor = x[2]
         x_key_padding_mask: torch.Tensor = x[3]
 
-        y_tokens: torch.Tensor = y[0]
-        y_pos_row: torch.Tensor = y[1]
-        y_pos_col: torch.Tensor = y[2]
-        y_key_padding_mask: torch.Tensor = y[3]
-
         pass
 
 """
