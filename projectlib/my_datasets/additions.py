@@ -1,12 +1,11 @@
 import torch
 
-from transformers import AutoTokenizer
-from typing import override
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from typing import override, TypeAlias, Union, Optional
 
 from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
 from projectlib.my_datasets._operands import OPERATION, Operation
 from projectlib.my_datasets.utils import num_to_str
-
 
 
 EVAL_PATH = "datasets/additions_eval.pt"
@@ -15,7 +14,7 @@ TRAIN_PATH = "datasets/additions_train.pt"
 
 BASE_SPEC = GenerationSpec(10, 10, 20)
 
-
+TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
 class AdditionDataset(GeneratedDataset):
     """
@@ -43,8 +42,8 @@ class AdditionDataset(GeneratedDataset):
 
     def __init__(
         self,
-        path: str = None,
-        tokenizer: AutoTokenizer = None,
+        path: Optional[str] = None,
+        tokenizer: Optional[TokenizerType] = None,
         train: bool = True,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_SPEC,
@@ -53,19 +52,20 @@ class AdditionDataset(GeneratedDataset):
     ):
         self.operand = operand
         self.spaces = spaces
-        
+
         path = path if path else (TRAIN_PATH if train else EVAL_PATH)
         super().__init__(
             path=path,
             tokenizer=tokenizer,
             regenerate=regenerate,
             generation_spec=generation_spec,
+            train=train,
         )
 
     @override
     def __generate__(self, spec: GenerationSpec):
         """Generate the addition dataset"""
-        
+
         inputs = []
         labels = []
 

@@ -68,7 +68,7 @@ def generate_blackboard(digits: int, low: int, high: int, tokenizer: AutoTokeniz
     tokenizer.add_special_tokens({'pad_token': BB_PAD_TOKEN, 'sep_token': BB_ROW_SEP_TOKEN})
 
     bb_spec = BlackboardSpec(
-        height=BB_HEIGHT, 
+        height=BB_HEIGHT,
         width=BB_WIDTH,
         randomize_position=BB_RANDOMIZE_POS,
         operation=BB_OPERATION
