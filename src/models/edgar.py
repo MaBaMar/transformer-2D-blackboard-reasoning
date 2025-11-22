@@ -12,7 +12,7 @@
 from typing import final
 import torch
 import math
-from torch import nn, t
+from torch import nn
 import torch.nn.functional as F
 
 from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
@@ -119,3 +119,147 @@ class Encoder(nn.Module):
             h2 = self.ffn(h2)
             x = x + self.dropout(h2)
             return x
+
+class Decoder(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        d_model: int,
+        num_heads: int,
+        num_blocks: int,
+        dropout: float = 0.1,
+    ) -> None:
+        # TODO implement
+        pass
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        pos_row: torch.Tensor,
+        pos_col: torch.Tensor,
+        key_padding_mask: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """
+        Implementation notes:
+        Outputs logits and loss. The target is the same as the input (we use teacher forcing)
+        No need to compute "real logits", i.e applying softmax, as we can also argmax over logits without softmax for generation
+        """
+        # TODO implement
+        # dummy placeholders
+        loss_value = torch.tensor([2])
+        return torch.zeros((1,)), loss_value
+
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        pos_row: torch.Tensor,
+        pos_col: torch.Tensor,
+        max_new_tokens: int,
+        eos_id: int | None = None,
+        pad_id: int | None = None,
+    ):
+        """
+        Outputs the next token for the model
+        """
+        # TODO: implement (can also move this to somewhere else, especially if we want to use stuff like beam search later on)
+        pass
+
+
+class Edgar(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        d_model: int,
+        num_heads_encoder: int,
+        num_heads_decoder: int,
+        n_encoder_blocks: int,
+        n_decoder_blocks: int
+    ) -> None:
+        """
+        Implementation of our Edgar model.
+
+        Args:
+            vocab_size (int): Vocabulary size.
+            d_model (int): Model dimension.
+            num_heads_encoder (int): Number of attention heads for encoder.
+            num_heads_decoder (int): Number of attention heads for decoder.
+            n_encoder_blocks (int): Number of encoder blocks.
+            n_decoder_blocks (int): Number of decoder blocks.
+        """
+        # TODO implement
+        pass
+
+    def forward(
+        self,
+        x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        y: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    ):
+        """
+        Forward pass of the model for training.
+
+        Args:
+            x (tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]): Input data (current blackboard state).
+            y (tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]): Target data (next blackboard state).
+
+        Note:
+            For questions about the input data format, consult projectlib/my_datasets/collators.py.
+            Model should be used with dataloaders like:
+                from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
+                collate_fn = make_collator_with_args(collate_blackboards, dataset.pad_id)
+                DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+        Returns:
+            Probably sth suitable for both generation and training
+        """
+
+        x_tokens: torch.Tensor = x[0]
+        x_pos_row: torch.Tensor = x[1]
+        x_pos_col: torch.Tensor = x[2]
+        x_key_padding_mask: torch.Tensor = x[3]
+
+        y_tokens: torch.Tensor = y[0]
+        y_pos_row: torch.Tensor = y[1]
+        y_pos_col: torch.Tensor = y[2]
+        y_key_padding_mask: torch.Tensor = y[3]
+
+        pass
+
+
+    def next_state(
+        self,
+        x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    ):
+        """Generates the next state of the blackboard as follows:
+            - feed current state to the decoder
+            - feed a blackboard that is empty (except for the BOS token in its first cell) to the decoder and generate the next token
+            - update the blackboard state with the generated token
+            - pass updated blackboard state to the decoder and generate the next token
+            - etc ...
+            - stop when we generated L-1 tokens, where L is the length of the input sequence (current blackboard)
+
+        Args:
+            x (tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]): Input data (current blackboard state).
+
+        Returns:
+            torch.Tensor: Next blackboard state.
+        """
+
+        x_tokens: torch.Tensor = x[0]
+        x_pos_row: torch.Tensor = x[1]
+        x_pos_col: torch.Tensor = x[2]
+        x_key_padding_mask: torch.Tensor = x[3]
+
+        y_tokens: torch.Tensor = y[0]
+        y_pos_row: torch.Tensor = y[1]
+        y_pos_col: torch.Tensor = y[2]
+        y_key_padding_mask: torch.Tensor = y[3]
+
+        pass
+
+"""
+Note:
+    - what remains is some kind of wrapper around the Edgar model that repeatedly calls next_state until an EOS state is reached.
+    - the wrapper should also maybe have a max number of iterations to prevent infinite loops.
+    - moreover, the wrapper is responsible for extending the output of next_state to a valid input for the next call by adding the positional encodings etc...
+    - we can implement this in the model itself or somewhere else.
+    - a dummy training loop should be written to test the model implementation for bugs.
+"""
