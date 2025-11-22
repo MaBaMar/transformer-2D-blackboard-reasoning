@@ -25,7 +25,7 @@
 
 
 import math
-from typing import Tuple, Optional
+from typing import Tuple, Optional, final
 
 import torch
 import torch.nn as nn
@@ -35,7 +35,7 @@ import torch.nn.functional as F
 # -------------------------------------------------------------------
 # RoPE utilities
 # -------------------------------------------------------------------
-
+@final  # affects the typechecker only
 class RoPECache(nn.Module):
     """
     Cache cos/sin tables for RoPE as buffers, similar in spirit to
@@ -130,7 +130,7 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
         two contiguous halves:
             cos/sin cache: emb = cat([freqs, freqs], dim=-1)
         so that each complex pair is (x[..., :d/2], x[..., d/2:]).
-    
+
     The function below implements (1). To implement (2), we would do:
     d = x.shape[-1]
     x1 = x[..., : d // 2]      # "real" part
@@ -183,7 +183,7 @@ def apply_rope(
 # -------------------------------------------------------------------
 # Core 2D-TPE Attention
 # -------------------------------------------------------------------
-
+@final  # affects typecheckers only
 class TwoDTPERoPEAttention(nn.Module):
     """
     Multi-head causal self-attention with 2D-TPE:
@@ -199,6 +199,7 @@ class TwoDTPERoPEAttention(nn.Module):
       - We then mix the two outputs with a learned per-head
         router that gives us weights r_row, r_col for each
         (token, head).
+      - We support causal masks for decoders or no causal masks for encoders.
     """
 
     # Router MLP: per-head, per-token mixing between row/col.
@@ -209,12 +210,14 @@ class TwoDTPERoPEAttention(nn.Module):
         d_model: int,
         num_heads: int,
         dropout: float = 0.0,
+        use_causal_mask: bool = True,
     ) -> None:
-        super().__init__()
+        super(nn.Module, self).__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
 
         self.d_model = d_model
         self.num_heads = num_heads
+        self.use_causal_mask = use_causal_mask
         self.head_dim = d_model // num_heads
 
         # projections
@@ -265,32 +268,26 @@ class TwoDTPERoPEAttention(nn.Module):
         k_sorted = torch.gather(k, 2, gather_idx)
         v_sorted = torch.gather(v, 2, gather_idx)
 
-        # sort padding mask the same way
-        if key_padding_mask is not None:
-            # [B, L]
-            kpm_sorted = torch.gather(key_padding_mask, 1, sort_idx)
-        else:
-            kpm_sorted = None
-
         # scaled dot-product attention
         attn_scores = torch.matmul(
             q_sorted, k_sorted.transpose(-2, -1)
         ) / math.sqrt(D)  # [B,H,L,L]
 
-        # causal mask (lower-triangular)
-        causal = torch.triu(
-            torch.ones((L, L), device=device, dtype=torch.bool),
-            diagonal=1,
-        )  # [L,L]
-        causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,L,L]
-
-        # key padding mask: mask out padded positions as keys
-        if kpm_sorted is not None:
-            # [B,1,1,L]
-            kpm_mask = kpm_sorted.unsqueeze(1).unsqueeze(2)
-            attn_mask = causal | kpm_mask
+        # generate fill mask for attention scores
+        if key_padding_mask is not None:
+            # sort padding mask the same way as key and query
+            attn_mask = torch.gather(key_padding_mask, 1, sort_idx).unsqueeze(1).unsqueeze(2) # [B,1,1,L]
         else:
-            attn_mask = causal
+            attn_mask = torch.zeros((B, 1, 1, L))
+
+        if self.use_causal_mask:
+            # causal mask (lower-triangular)
+            causal = torch.triu(
+                torch.ones((L, L), device=device, dtype=torch.bool),
+                diagonal=1,
+            )  # [L,L]
+            causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,L,L]
+            attn_mask |= causal
 
         attn_scores = attn_scores.masked_fill(attn_mask, float("-inf"))
         attn_weights = F.softmax(attn_scores, dim=-1)
@@ -313,17 +310,25 @@ class TwoDTPERoPEAttention(nn.Module):
         key_padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        hidden_states: [B, L, d_model]
-        pos_row, pos_col: [B, L] integer indices
-        key_padding_mask: [B, L] (True where padded)
+        Forward pass of the Transformer 2D model. CAREFUL: The key_padding_mask is 1 if a token should be ignored and 0 otherwise
+
+        Args:
+            hidden_states (torch.Tensor): Input tensor of shape [B, L, d_model].
+            pos_row (torch.Tensor): Row position tensor of shape [B, L] with integer indices.
+            pos_col (torch.Tensor): Column position tensor of shape [B, L] with integer indices.
+            key_padding_mask (Optional[torch.Tensor]): Padding mask tensor of shape [B, L]. A one indicates a padded token.
+
+        Returns:
+            torch.Tensor: Attention result tensor of shape [B, L, d_model].
         """
+
         B, L, _ = hidden_states.shape
         device = hidden_states.device
 
         # project to q,k,v
-        q = self.q_proj(hidden_states)  # [B,L,D]
-        k = self.k_proj(hidden_states)
-        v = self.v_proj(hidden_states)
+        q: torch.Tensor = self.q_proj(hidden_states)  # [B,L,D]
+        k: torch.Tensor = self.k_proj(hidden_states)
+        v: torch.Tensor = self.v_proj(hidden_states)
 
         # reshape to [B, H, L, D_head]
         q = q.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
