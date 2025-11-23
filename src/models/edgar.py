@@ -47,7 +47,7 @@ class Encoder(nn.Module):
         num_blocks: int,
         dropout: float = 0.1,
     ) -> None:
-        super(nn.Module, self).__init__()
+        super().__init__()
 
         self.tok_emb = nn.Embedding(vocab_size, d_model)
         self.dropout = nn.Dropout(dropout)
@@ -93,7 +93,8 @@ class Encoder(nn.Module):
             num_heads: int,
             dropout: float = 0.1,
         ) -> None:
-            super(nn.Module, self).__init__()
+            super().__init__()
+
 
             # building blocks
             self.ln1 = nn.LayerNorm(d_model)
@@ -254,8 +255,7 @@ class _DecoderBlock(nn.Module):
             num_heads: int,
             dropout: float = 0.1,
         ) -> None:
-            super(nn.Module, self).__init__()
-
+            super().__init__()
             # building blocks
             self.ln1 = nn.LayerNorm(d_model)
             self.ln2 = nn.LayerNorm(d_model)
@@ -373,6 +373,8 @@ class Edgar(nn.Module):
         y_pos_row: torch.Tensor = y[1]
         y_pos_col: torch.Tensor = y[2]
         y_key_padding_mask: torch.Tensor = y[3]
+
+
         context = self.encoder(
             input_ids=x_tokens,
             pos_row=x_pos_row,

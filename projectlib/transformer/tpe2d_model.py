@@ -211,7 +211,7 @@ class TwoDTPERoPEAttention(nn.Module):
         dropout: float = 0.0,
         use_causal_mask: bool = True,
     ) -> None:
-        super(nn.Module, self).__init__()
+        super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
 
         self.d_model = d_model
@@ -279,9 +279,9 @@ class TwoDTPERoPEAttention(nn.Module):
         # generate fill mask for attention scores
         if key_padding_mask is not None:
             # sort padding mask the same way as key and query
-            attn_mask = torch.gather(key_padding_mask, 1, k_sort_idx).unsqueeze(1).unsqueeze(2) # [B,1,1,L_k]
+            attn_mask = torch.gather(key_padding_mask, 1, k_sort_idx).unsqueeze(1).unsqueeze(2).bool() # [B,1,1,L_k]
         else:
-            attn_mask = torch.zeros((B, 1, 1, L_k), dtype=torch.bool)
+            attn_mask = torch.zeros((B, 1, 1, L_k),device=device, dtype=torch.bool)
 
         if self.use_causal_mask:
             # causal mask (lower-triangular)
@@ -290,7 +290,7 @@ class TwoDTPERoPEAttention(nn.Module):
                 diagonal=1,
             )  # [L_q,L_k]
             causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,L_q,L_k]
-            attn_mask |= causal
+            attn_mask = attn_mask | causal 
 
         attn_scores = attn_scores.masked_fill(attn_mask, float("-inf"))
         attn_weights = F.softmax(attn_scores, dim=-1)
