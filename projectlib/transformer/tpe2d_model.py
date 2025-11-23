@@ -146,20 +146,20 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
 
 
 def apply_rope(
-    q: torch.Tensor,
-    k: torch.Tensor,
+    qk_tensor: torch.Tensor,
+    #k: torch.Tensor,
     positions: torch.Tensor,
     cos: torch.Tensor,
     sin: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> torch.Tensor:
     """
     Apply rotary position embedding on q and k given integer positions.
 
-    q, k: [B, H, L, D]
+    qk_tensor: [B, H, L, D]
     positions: [B, L] (integer indices in [0, max_position))
     cos, sin: [1,1,max_position,D]
     """
-    B, H, L, D = q.shape
+    B, H, L, D = qk_tensor.shape
 
     # gather cos/sin per token position
     # positions_expanded: [B, 1, L, 1] -> broadcast to [B, H, L, D]
@@ -175,9 +175,8 @@ def apply_rope(
         pos,
     )
 
-    q_out = (q * cos_pos) + (rotate_half(q) * sin_pos)
-    k_out = (k * cos_pos) + (rotate_half(k) * sin_pos)
-    return q_out, k_out
+    qk_out = (qk_tensor * cos_pos) + (rotate_half(qk_tensor) * sin_pos)
+    return qk_out
 
 
 # -------------------------------------------------------------------
@@ -245,60 +244,64 @@ class TwoDTPERoPEAttention(nn.Module):
         q: torch.Tensor,
         k: torch.Tensor,
         v: torch.Tensor,
-        positions: torch.Tensor,
+        q_positions: torch.Tensor,
+        k_positions: torch.Tensor,
         key_padding_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
         """
         Run causal self-attention for a single order.
 
         q,k,v: [B, H, L, D]
-        positions: [B, L] integer order indices
+        q_positions: [B, L] integer order indices
+        k_positions: [B, L] integer order indices
         key_padding_mask: [B, L] bool (True where padded)
         """
-        B, H, L, D = q.shape
+        B, H, L_q, D = q.shape
+        _, _, L_k, _ = k.shape
         device = q.device
 
         # sort tokens according to positions (each batch separately)
-        # positions_sorted, sort_idx: [B, L]
-        _, sort_idx = torch.sort(positions, dim=-1, stable=True)
-
+        # q_positions_sorted, sort_idx: [B, L_q]
+        _, q_sort_idx = torch.sort(q_positions, dim=-1, stable=True)
+        q_gather_idx = q_sort_idx.unsqueeze(1).unsqueeze(-1).expand(B, H, L_q, D)
+        q_sorted = torch.gather(q, 2, q_gather_idx)
         # gather q,k,v in sorted order
-        gather_idx = sort_idx.unsqueeze(1).unsqueeze(-1).expand(B, H, L, D)
-        q_sorted = torch.gather(q, 2, gather_idx)
-        k_sorted = torch.gather(k, 2, gather_idx)
-        v_sorted = torch.gather(v, 2, gather_idx)
+        _, k_sort_idx = torch.sort(k_positions, dim=-1, stable=True)
+        k_gather_idx = k_sort_idx.unsqueeze(1).unsqueeze(-1).expand(B, H, L_k, D)
+        k_sorted = torch.gather(k, 2, k_gather_idx)
+        v_sorted = torch.gather(v, 2, k_gather_idx)
 
         # scaled dot-product attention
         attn_scores = torch.matmul(
             q_sorted, k_sorted.transpose(-2, -1)
-        ) / math.sqrt(D)  # [B,H,L,L]
+        ) / math.sqrt(D)  # [B,H,L_q,L_k]
 
         # generate fill mask for attention scores
         if key_padding_mask is not None:
             # sort padding mask the same way as key and query
-            attn_mask = torch.gather(key_padding_mask, 1, sort_idx).unsqueeze(1).unsqueeze(2) # [B,1,1,L]
+            attn_mask = torch.gather(key_padding_mask, 1, k_sort_idx).unsqueeze(1).unsqueeze(2) # [B,1,1,L_k]
         else:
-            attn_mask = torch.zeros((B, 1, 1, L))
+            attn_mask = torch.zeros((B, 1, 1, L_k), dtype=torch.bool)
 
         if self.use_causal_mask:
             # causal mask (lower-triangular)
             causal = torch.triu(
-                torch.ones((L, L), device=device, dtype=torch.bool),
+                torch.ones((L_q, L_k), device=device, dtype=torch.bool),
                 diagonal=1,
-            )  # [L,L]
-            causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,L,L]
+            )  # [L_q,L_k]
+            causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,L_q,L_k]
             attn_mask |= causal
 
         attn_scores = attn_scores.masked_fill(attn_mask, float("-inf"))
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = self.attn_dropout(attn_weights)
 
-        out_sorted = torch.matmul(attn_weights, v_sorted)  # [B,H,L,D]
+        out_sorted = torch.matmul(attn_weights, v_sorted)  # [B,H,L_q,D]
 
         # invert the sort to map back to original token positions
-        inv_idx = torch.argsort(sort_idx, dim=-1)
-        inv_gather_idx = inv_idx.unsqueeze(1).unsqueeze(-1).expand(B, H, L, D)
-        out = torch.gather(out_sorted, 2, inv_gather_idx)  # [B,H,L,D]
+        inv_idx = torch.argsort(q_sort_idx, dim=-1)
+        inv_gather_idx = inv_idx.unsqueeze(1).unsqueeze(-1).expand(B, H, L_q, D)
+        out = torch.gather(out_sorted, 2, inv_gather_idx)  # [B,H,L_q,D]
 
         return out
 
@@ -307,6 +310,9 @@ class TwoDTPERoPEAttention(nn.Module):
         hidden_states: torch.Tensor,
         pos_row: torch.Tensor,
         pos_col: torch.Tensor,
+        context: Optional[torch.Tensor] = None,
+        context_pos_row: Optional[torch.Tensor] = None,
+        context_pos_col: Optional[torch.Tensor] = None, 
         key_padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
@@ -318,48 +324,58 @@ class TwoDTPERoPEAttention(nn.Module):
             pos_col (torch.Tensor): Column position tensor of shape [B, L] with integer indices.
             key_padding_mask (Optional[torch.Tensor]): Padding mask tensor of shape [B, L]. A one indicates a padded token.
 
+            context (Optional[torch.Tensor]): Context tensor of shape [B, L_ctx, d_model]. Modification for cross-attention.
+            context_pos_row (Optional[torch.Tensor]): Row position tensor for context of shape [B, L_ctx] with integer indices.
+            context_pos_col (Optional[torch.Tensor]): Column position tensor for context of shape [B, L_ctx] with integer indices.
         Returns:
             torch.Tensor: Attention result tensor of shape [B, L, d_model].
         """
 
         B, L, _ = hidden_states.shape
         device = hidden_states.device
+        if context is None:
+            # self-attention
+            kv_input = hidden_states
+            kv_pos_row = pos_row
+            kv_pos_col = pos_col
+            kv_B, kv_L, _ = hidden_states.shape
 
-        # project to q,k,v
+        else:
+            # cross-attention modification
+            kv_input = context
+            kv_pos_row = context_pos_row
+            kv_pos_col = context_pos_col
+            kv_B, kv_L, _ = context.shape
+
         q: torch.Tensor = self.q_proj(hidden_states)  # [B,L,D]
-        k: torch.Tensor = self.k_proj(hidden_states)
-        v: torch.Tensor = self.v_proj(hidden_states)
+        k: torch.Tensor = self.k_proj(kv_input)
+        v: torch.Tensor = self.v_proj(kv_input)
 
-        # reshape to [B, H, L, D_head]
         q = q.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
-        k = k.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
-        v = v.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
+        k = k.view(kv_B, kv_L, self.num_heads, self.head_dim).transpose(1, 2)
+        v = v.view(kv_B, kv_L, self.num_heads, self.head_dim).transpose(1, 2)
 
+                   
+        max_pos = int(max(kv_pos_row.max().item(), kv_pos_col.max().item(), pos_row.max().item(), pos_col.max().item(),)) + 1
         # build / reuse RoPE cache up to max position we see in either order
-        max_pos = int(
-            max(
-                pos_row.max().item(),
-                pos_col.max().item(),
-            )
-        ) + 1
-
         cos, sin = self.rope_cache(
             max_position=max_pos,
             device=device,
-            dtype=q.dtype,
-        )
+            dtype=q.dtype,)
 
-        # Apply RoPE for row order
-        q_row, k_row = apply_rope(q, k, pos_row, cos, sin)  # [B,H,L,D]
-        # Apply RoPE for col order
-        q_col, k_col = apply_rope(q, k, pos_col, cos, sin)
 
+    
+        # Apply RoPE for all four positions (4 instead of 2 cals because kv_pos_row does not have to be the same as pos_row)
+        q_row = apply_rope(q, pos_row, cos, sin)
+        q_col = apply_rope(q, pos_col, cos, sin)
+        k_row = apply_rope(k, kv_pos_row, cos, sin)
+        k_col = apply_rope(k, kv_pos_col, cos, sin)
         # attention for each order
         out_row = self._attend_with_order(
-            q_row, k_row, v, pos_row, key_padding_mask
+            q_row, k_row, v, q_positions=pos_row, k_positions=kv_pos_row, key_padding_mask=key_padding_mask
         )  # [B,H,L,D]
         out_col = self._attend_with_order(
-            q_col, k_col, v, pos_col, key_padding_mask
+            q_col, k_col, v, q_positions=pos_col, k_positions=kv_pos_col, key_padding_mask=key_padding_mask
         )  # [B,H,L,D]
 
         # router: per-head, per-token logits over {row, col}
@@ -421,17 +437,15 @@ class TransformerBlock2DTPE(nn.Module):
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
+
         self.attn = TwoDTPERoPEAttention(
             d_model=d_model,
             num_heads=num_heads,
             dropout=dropout,
         )
+
         self.ln2 = nn.LayerNorm(d_model)
-        self.ffn = FeedForward(
-            d_model=d_model,
-            hidden_dim=4 * d_model,
-            dropout=dropout,
-        )
+        self.ffn = FeedForward( d_model=d_model, hidden_dim=4 * d_model,dropout=dropout,)
         self.dropout = nn.Dropout(dropout)
 
     def forward(
@@ -472,14 +486,8 @@ class CausalTransformer2DTPE(nn.Module):
         self.tok_emb = nn.Embedding(vocab_size, d_model)
         self.drop = nn.Dropout(dropout)
 
-        self.layers = nn.ModuleList([
-            TransformerBlock2DTPE(
-                d_model=d_model,
-                num_heads=num_heads,
-                dropout=dropout,
-            )
-            for _ in range(num_layers)
-        ])
+        self.layers = nn.ModuleList([TransformerBlock2DTPE(d_model=d_model,num_heads=num_heads, 
+                                                             dropout=dropout,) for _ in range(num_layers) ])
 
         self.ln_f = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab_size, bias=False)
