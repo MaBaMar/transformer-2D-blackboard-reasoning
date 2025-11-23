@@ -210,11 +210,12 @@ class Decoder(nn.Module):
         """
         # TODO: implement (can also move this to somewhere else, especially if we want to use stuff like beam search later on)
         self.eval()
-        device = input_ids.device
-        B, L = input_ids.shape
+
         out_ids = input_ids.clone()
         row = pos_row.clone()
         col = pos_col.clone()
+
+        W = int(context_pos_col.max().item()) + 1
 
         if pad_id is None:
             pad_id = 0
@@ -237,11 +238,14 @@ class Decoder(nn.Module):
             next_token = logits[:, -1].argmax(dim=-1)  # greedy
             out_ids = torch.cat([out_ids, next_token.unsqueeze(-1)], dim=-1)
 
-            # simple continuation of orders: just +1 from last
             last_row = row[:, -1]
             last_col = col[:, -1]
-            row = torch.cat([row, (last_row + 1).unsqueeze(-1)], dim=-1) # is this diagonal?
-            col = torch.cat([col, (last_col + 1).unsqueeze(-1)], dim=-1)
+            next_col_candidate = last_col + 1
+            line_break = (next_col_candidate >= W)
+            next_row = torch.where(line_break, last_row + 1, last_row)
+            next_col = torch.where(line_break, torch.zeros_like(next_col_candidate), next_col_candidate)
+            row = torch.cat([row, (next_row).unsqueeze(-1)], dim=-1) 
+            col = torch.cat([col, (next_col).unsqueeze(-1)], dim=-1)
 
             if eos_id is not None and bool((next_token == eos_id).all()):
                 break
@@ -422,6 +426,7 @@ class Edgar(nn.Module):
 
         device = x_tokens.device
         B, L = x_tokens.shape
+
         context = self.encoder(
             input_ids=x_tokens,
             pos_row=x_pos_row,
