@@ -46,7 +46,7 @@ def make_collator_with_args(
 # ------------------------------------------------------------
 # Higher-order collators
 # ------------------------------------------------------------
-def collate_blackboards(batch: list[tuple[BBDataSampleType, BBDataSampleType]], pad_token_id: int) -> tuple[BBCollatedSampleType, BBCollatedSampleType]:
+def collate_blackboards(batch: list[tuple[BBDataSampleType, BBDataSampleType]], pad_token_id: int, device: torch.device) -> tuple[BBCollatedSampleType, BBCollatedSampleType]:
     """
     Collate a batch of blackboard data into a tuple of input and output tensors.
 
@@ -57,6 +57,7 @@ def collate_blackboards(batch: list[tuple[BBDataSampleType, BBDataSampleType]], 
                 - "pos_row": torch.Tensor of shape (H*W,)
                 - "pos_col": torch.Tensor of shape (H*W,)
         pad_token_id (int): The ID of the padding token, needed for mask generation.
+        device (torch.device): The device on which the tensors should be placed.
 
     Returns:
         tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
@@ -68,12 +69,12 @@ def collate_blackboards(batch: list[tuple[BBDataSampleType, BBDataSampleType]], 
     B, (H,W) = len(batch), batch[0][0]["tokens"].shape
     L = H * W       # length of flattened blackboard
 
-    x_tokensq   = torch.empty((B, L))
-    x_pos_row   = torch.empty((B, L))
-    x_pos_col   = torch.empty((B, L))
-    y_tokensq   = torch.empty((B, L))
-    y_pos_row   = torch.empty((B, L))
-    y_pos_col   = torch.empty((B, L))
+    x_tokensq   = torch.empty((B, L), dtype=torch.long, device=device)
+    x_pos_row   = torch.empty((B, L), dtype=torch.long, device=device)
+    x_pos_col   = torch.empty((B, L), dtype=torch.long, device=device)
+    y_tokensq   = torch.empty((B, L), dtype=torch.long, device=device)
+    y_pos_row   = torch.empty((B, L), dtype=torch.long, device=device)
+    y_pos_col   = torch.empty((B, L), dtype=torch.long, device=device)
 
     for i, item in enumerate(batch):
         x_tokensq[i] = item[0]["tokens"].flatten()

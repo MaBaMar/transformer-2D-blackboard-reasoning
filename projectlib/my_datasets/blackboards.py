@@ -55,7 +55,7 @@ BB_EOS_TOKEN            = "<EOS>"      # this token is a placeholder for the end
 BB_PAD_TOKEN            = "<PAD>"      # this token is a placeholder for padding
 BB_OPTOKEN_LIST         = ["+", "-"]   # defines supported operator tokens
 BB_FILL_NUM_TOKEN       = "_"          # this token indicates placeholders for numbers to potentially be filled in
-BB_OPLINE_SEG_TOKEN     = "-"          # this token indicates a segment of the computation line separating operands and carry from the result
+BB_OPLINE_SEG_TOKEN     = "="          # this token indicates a segment of the computation line separating operands and carry from the result
 
 # ------------------------------------------------------------
 # Simple tokenizer
@@ -72,11 +72,12 @@ class BBVocabTokenizer:
             BB_EMPTY_TOKEN: 2,
             BB_PAD_TOKEN: 3,
             **{str(i): i + 4 for i in range(10)},
-            **{operand_token: i + 15 for i, operand_token in enumerate(BB_OPTOKEN_LIST)},
-            BB_FILL_NUM_TOKEN: len(BB_OPTOKEN_LIST) + 15,
-            BB_OPLINE_SEG_TOKEN: len(BB_OPTOKEN_LIST) + 16,
-            **{token: len(BB_OPTOKEN_LIST) + 17 + i for i, token in enumerate(additional_tokens)},
+            **{operand_token: i + 14 for i, operand_token in enumerate(BB_OPTOKEN_LIST)},
+            BB_FILL_NUM_TOKEN: len(BB_OPTOKEN_LIST) + 14,
+            BB_OPLINE_SEG_TOKEN: len(BB_OPTOKEN_LIST) + 15,
+            **{token: len(BB_OPTOKEN_LIST) + 16 + i for i, token in enumerate(additional_tokens)},
         }
+        print("Token to ID mapping:", self.token_to_id)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
 
     def encode(self, bb_grid: List[List[str]]) -> torch.Tensor:
