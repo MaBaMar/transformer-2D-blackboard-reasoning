@@ -16,6 +16,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
+from projectlib.wrappertypes import BBEndOfChainException, BBChainGenerator
 
 class FeedForward(nn.Module):
     def __init__(
@@ -139,7 +140,7 @@ class Decoder(nn.Module):
             _DecoderBlock(d_model, num_heads, dropout)
             for _ in range(num_blocks)
         ])
-        
+
         self.ln_f = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab_size, bias=False)
 
@@ -148,7 +149,7 @@ class Decoder(nn.Module):
         input_ids: torch.Tensor,
         pos_row: torch.Tensor,
         pos_col: torch.Tensor,
-        context: torch.Tensor, 
+        context: torch.Tensor,
         context_pos_row: torch.Tensor,
         context_pos_col: torch.Tensor,
         key_padding_mask: Optional[torch.Tensor]= None,       # Mask for input_ids
@@ -166,12 +167,12 @@ class Decoder(nn.Module):
 
         for layer in self.transformer_blocks:
             x = layer(
-                x=x, 
-                pos_row=pos_row, 
-                pos_col=pos_col, 
+                x=x,
+                pos_row=pos_row,
+                pos_col=pos_col,
                 key_padding_mask=key_padding_mask,
-                context=context, 
-                context_pos_row=context_pos_row, 
+                context=context,
+                context_pos_row=context_pos_row,
                 context_pos_col=context_pos_col,
                 context_key_padding_mask=context_key_padding_mask,
             )
@@ -184,7 +185,7 @@ class Decoder(nn.Module):
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)),
                 targets.view(-1),
-                ignore_index=-100 
+                ignore_index=-100
             )
 
         return logits, loss
@@ -232,7 +233,7 @@ class Decoder(nn.Module):
             out_ids = torch.cat([out_ids, next_token.unsqueeze(-1)], dim=-1)
 
             if eos_id is not None and bool((next_token == eos_id).all()):
-                break
+                raise BBEndOfChainException()
 
         return out_ids
 
@@ -249,8 +250,8 @@ class _DecoderBlock(nn.Module):
             self.ln2 = nn.LayerNorm(d_model)
             self.ln3 = nn.LayerNorm(d_model)
             self.dropout = nn.Dropout(dropout)
-            self.masked_attn = TwoDTPERoPEAttention(d_model, num_heads, dropout, use_causal_mask=True)  
-            self.cross_attn = TwoDTPERoPEAttention(d_model, num_heads, dropout, use_causal_mask=False) 
+            self.masked_attn = TwoDTPERoPEAttention(d_model, num_heads, dropout, use_causal_mask=True)
+            self.cross_attn = TwoDTPERoPEAttention(d_model, num_heads, dropout, use_causal_mask=False)
             self.ffn = FeedForward(d_model, 4 * d_model, dropout)
 
         def forward(
@@ -264,20 +265,20 @@ class _DecoderBlock(nn.Module):
             context_pos_col: Optional[torch.Tensor] = None,
             context_key_padding_mask: Optional[torch.Tensor] = None,
         ) -> torch.Tensor:
-            
+
 
             # pre-norm + attention
             h = self.ln1(x)
-            h = self.masked_attn(hidden_states=h, pos_row=pos_row, 
+            h = self.masked_attn(hidden_states=h, pos_row=pos_row,
                                  pos_col=pos_col, key_padding_mask=key_padding_mask)
             x = x + self.dropout(h)
 
             # pre-norm + cross-attention
             h = self.ln2(x)
             h = self.cross_attn(hidden_states=h, context=context, pos_row=pos_row, pos_col=pos_col,
-                                context_pos_row=context_pos_row, context_pos_col=context_pos_col, 
+                                context_pos_row=context_pos_row, context_pos_col=context_pos_col,
                                  key_padding_mask=context_key_padding_mask)
-            
+
             x = x + self.dropout(h)
 
             # pre-norm + FFN
@@ -319,7 +320,7 @@ class Edgar(BBChainGenerator):
             d_model=d_model,
             num_heads=num_heads_encoder,
             num_blocks=n_encoder_blocks
-        )   
+        )
         self.decoder = Decoder(
             vocab_size=vocab_size,
             d_model=d_model,
@@ -388,21 +389,6 @@ class Edgar(BBChainGenerator):
         self,
         x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     ):
-        """Generates the next state of the blackboard as follows:
-            - feed current state to the decoder
-            - feed a blackboard that is empty (except for the BOS token in its first cell) to the decoder and generate the next token
-            - update the blackboard state with the generated token
-            - pass updated blackboard state to the decoder and generate the next token
-            - etc ...
-            - stop when we generated L-1 tokens, where L is the length of the input sequence (current blackboard)
-
-        Args:
-            x (tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]): Input data (current blackboard state).
-
-        Returns:
-            torch.Tensor: Next blackboard state.
-        """
-
         x_tokens: torch.Tensor = x[0]
         x_pos_row: torch.Tensor = x[1]
         x_pos_col: torch.Tensor = x[2]
