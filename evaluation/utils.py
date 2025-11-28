@@ -151,7 +151,7 @@ def generate_run_commands(
             )
         else:
             answer = "yes"
-        if answer == "yes":
+        if answer == "yes" or answer == "y":
             for cmd in cluster_cmds:
                 if dry:
                     print(cmd)
@@ -161,12 +161,12 @@ def generate_run_commands(
     elif mode == "local":
         if promt:
             answer = input(
-                f"About to run {len(command_list)} jobs in a loop. Proceed? [yes/no]"
+                f"About to run {len(command_list)} jobs in a loop. Proceed? [yes/no] "
             )
         else:
             answer = "yes"
 
-        if answer == "yes":
+        if answer == "yes" or answer == "y":
             for cmd in command_list:
                 wrapped_cmd = f"bash -i -c \"conda activate {CONDA_ENV}; {cmd}\""
 
@@ -178,12 +178,12 @@ def generate_run_commands(
     elif mode == "local_async":
         if promt:
             answer = input(
-                f"About to launch {len(command_list)} commands in {num_cpus} local processes. Proceed? [yes/no]"
+                f"About to launch {len(command_list)} commands in {num_cpus} local processes. Proceed? [yes/no] "
             )
         else:
             answer = "yes"
 
-        if answer == "yes":
+        if answer == "yes" or answer == "y":
             if dry:
                 for cmd in command_list:
                     print(cmd)

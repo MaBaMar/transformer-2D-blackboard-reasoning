@@ -14,14 +14,15 @@ applicable_configs = {
     "models": [
         #"Llama-13B",
         "Llama-8B",
+        #"Llama-1B",
     ],
     "task": [
-        "addition",
-        "scratchpad",
+        "basic",
+        #"scratchpad",
         #"blackboard",
     ],
-    "digits": [3],
-    "sizes": [100],
+    "digits": [1],
+    "sizes": [1],
 }
 
 def main(args):

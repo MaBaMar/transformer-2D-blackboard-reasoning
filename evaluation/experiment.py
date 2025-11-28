@@ -5,7 +5,7 @@ import re
 
 import numpy as np
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -16,11 +16,7 @@ from projectlib.my_datasets import *
 MODEL_PATHS = {
     "Llama-13B": "TheBloke/LLaMA-13b-GGUF",
     "Llama-8B": "meta-llama/Meta-Llama-3-8B",
-}
-
-TOKENIZER_PATHS = {
-    "Llama-13B": "TheBloke/LLaMA-13b-GGUF",
-    "Llama-8B": "meta-llama/Meta-Llama-3-8B",
+    "Llama-1B": "meta-llama/Llama-Guard-3-1B",
 }
 
 
@@ -30,12 +26,36 @@ TOKENIZER_PATHS = {
 #
 
 
+def setup_model(model, device=-1):
+    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
+    tok = AutoTokenizer.from_pretrained(model, padding_side="left")
+    model = AutoModelForCausalLM.from_pretrained(
+        model, 
+        torch_dtype="auto",
+        device_map="auto" if torch.cuda.is_available() else None,
+        quantization_config=quantization_config,
+    )
+
+    if tok.pad_token_id is None:
+        tok.pad_token = tok.eos_token
+    
+    pipe = pipeline(
+        "text-generation", 
+        model=model,
+        tokenizer=tok, 
+    )
+
+    return pipe, tok
+
+
+
 def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
     low = 10**(digits - 1)
     high = 10**(digits)
     spec = GenerationSpec(size, low, high)
 
-    if task == "addition":
+    if task == "basic":
         return AdditionDataset(
             train=False,
             regenerate=True,
@@ -54,9 +74,46 @@ def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
     
 
 
-def check_prediction(prediction: str, label: str) -> int:
-    result_true = extract_label_number(label[0])
-    result_pred = extract_label_number(prediction[0])
+def ask(input, task, pipe, tok):
+    if task == "basic":
+        prompt = (f"Compute the sum. Answer with just the integer. \n Q: {input} = ? A:"    )
+        out = pipe(prompt, max_new_tokens=30 ,do_sample=False,
+                    truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
+        added = out[len(prompt):].strip()
+        m = re.search(r"-?\d+", added)
+        if m:
+            pred = int(m.group(0))
+        else:
+            return None
+        
+    elif task == "scratch_pad":
+        prompt = (f"You are a calculator. Show your work between <scratch> and </scratch>. Then output a single line: \"Result: <number>\" and stop. Your Task including an Example: {input}")
+        out = pipe(prompt, max_new_tokens=200 ,do_sample=False,
+                    truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
+        added = out[len(prompt):].strip()
+        print(f"Scratchpad output: {added}")
+        m = re.findall(r"Result:\s*([0-9 ]+)", added)
+        if m:
+            raw = m[0].strip()
+        else:
+            return None
+        pred = int(raw.replace(" ", ""))
+    else:
+        raise NotImplementedError()
+
+    return pred
+    
+
+
+def check_prediction(prediction: str, label: str, task) -> int:
+    if task == "basic":
+        result_true = extract_label_number(label[0])
+        result_pred = extract_label_number(prediction[0])
+    elif task == "scratch_pad":
+        result_true = int(label[0])
+        result_pred = int(prediction[0])
+    else:
+        raise NotImplementedError()
 
     print(f"result_true: {result_true} and result_pred: {result_pred}")
 
@@ -74,8 +131,11 @@ def extract_label_number(label: str) -> int | None:
     """
     # Look for the last 'Result:' followed by digits and spaces
     m = re.findall(r"Result:\s*([0-9 ]+)", label)
-    raw = m[-1].strip().replace(" ", "")
-    label = int(raw) if raw.isdigit() else None
+    if len(m) > 0:
+        raw = m[-1].strip().replace(" ", "")
+        label = int(raw) if raw.isdigit() else None
+    else:
+        label = None
     return label
 
 
@@ -120,16 +180,7 @@ def experiment(
 
     print(f"Evaluating {model_name} [{MODEL_PATHS[model_name]}] on {task} with {digits}-digits\n")
 
-    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-
-    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATHS[model_name])
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_PATHS[model_name], 
-        dtype="auto",
-        device_map="auto" if torch.cuda.is_available() else None,
-        quantization_config=quantization_config,
-    )
-    model.eval()
+    pipe, tok = setup_model(MODEL_PATHS[model_name], device)
 
     dataset = load_dataset(task, size, digits)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
@@ -144,17 +195,7 @@ def experiment(
         input_text = element["input"]
         label = element["label"]
 
-        input = tokenizer(input_text, return_tensors="pt").to(device)
-
-        with torch.no_grad():
-            outputs = model.generate(
-                **input,
-                max_new_tokens=64,
-                do_sample=False,
-                temperature=0.0,
-            )
-
-        prediction = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        prediction = ask(input_text, task, pipe, tok)
 
         correct += check_prediction(prediction, label)
 
@@ -165,7 +206,6 @@ def experiment(
     })
 
     wandb.finish()
-
 
     
 
