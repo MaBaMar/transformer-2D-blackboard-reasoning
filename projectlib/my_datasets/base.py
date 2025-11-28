@@ -3,16 +3,17 @@ import torch
 import numpy as np
 
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from abc import ABC, abstractmethod
+from typing import Optional, Union, TypeAlias, Any
 from dataclasses import dataclass
-
 
 DATASETS_BASE_DIR = "datasets/"
 
 TOKENIZER_MAX_LENGTH = 20
 RANDOM_SEED = 0
 
+TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
 @dataclass
 class GenerationSpec:
@@ -27,16 +28,18 @@ class GeneratedDataset(Dataset, ABC):
     def __init__(
         self,
         path: str,
-        tokenizer: AutoTokenizer = None,
+        tokenizer: Optional[TokenizerType] = None,
         regenerate: bool = False,
-        generation_spec: GenerationSpec = None,
+        generation_spec: Optional[GenerationSpec] = None,
         max_length: int = TOKENIZER_MAX_LENGTH,
+        train: bool = False
     ):
         super().__init__()
 
-        # fix random seed for reproducibility
-        torch.manual_seed(RANDOM_SEED)
-        np.random.seed(RANDOM_SEED)
+        # fix random seed for reproducibility, the train flag makes sure that train and eval sets get different random seeds
+        seed = RANDOM_SEED + (not train)
+        torch.manual_seed(seed)
+        np.random.seed(seed)
 
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -63,7 +66,7 @@ class GeneratedDataset(Dataset, ABC):
     def __len__(self):
         return len(self.labels)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> Any:
         input = self.data[idx]
         label = self.labels[idx]
 

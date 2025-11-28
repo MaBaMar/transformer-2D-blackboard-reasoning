@@ -1,45 +1,129 @@
-"""Script to play around with blackboard state generation"""
+# ------------------------------------------------------------
+# test_blackboard.py
+#
+# Test for blackboard.py and associated modules.
+#
+# Run with:
+#  - python -m testscripts.test_blackboard
+#  - run from the project root
+# ------------------------------------------------------------
 
-from projectlib.my_datasets._blackboard_operands import *
-from projectlib.my_datasets.blackboards import BASE_GEN_SPEC, BasicOpBlackboardDataset, BasicOpBlackboardIterator, BlackboardSpec, BB_PAD_TOKEN, BB_ROW_SEP_TOKEN
-from projectlib.my_datasets.utils import bb_tokinpt_to_str
-from transformers import AutoTokenizer
-
-import numpy as np
+import os
+import pytest
 import torch
+from torch.utils.data import DataLoader
 
-# NOTE: There are no automated tests for this script yet, because the tokenization and string format will have to be adjusted to match the model's requirements.
+from projectlib.my_datasets._blackboard_operands import Addition, Subtraction
+from projectlib.my_datasets.blackboards import BB_EMPTY_TOKEN, BB_BOS_TOKEN, BB_EOS_TOKEN, BB_PAD_TOKEN, BB_FILL_NUM_TOKEN, BB_OPLINE_SEG_TOKEN
+from projectlib.my_datasets.blackboards import (
+    BlackboardSpec,
+    GenerationSpec,
+    TokenizedBlackboardDataset,
+    bb_prettyprint,
+)
+
+from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
+
+# --- 1. Fixtures for Setup and Shared Data ---
+
+@pytest.fixture(scope="session")
+def setup_data_tmp_path(tmp_path_factory):
+    data_tmp_path = tmp_path_factory.mktemp("datacache")
+    return str(data_tmp_path)
+
+@pytest.fixture(scope="session")
+def gen_spec():
+    return GenerationSpec(size=1, low=10, high=99)
+
+@pytest.fixture(scope="session")
+def test_chain_data_add():
+    return [
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['+', BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['+', BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, '1', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, '7', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['+', BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, '1', '1', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, '4', '7', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['+', BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, '1', '1', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, '1', '4', '7', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EOS_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN]],
+    ]
+
+@pytest.fixture(scope="session")
+def test_chain_data_sub():
+    return [
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['-', BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['-', BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, '0', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, BB_FILL_NUM_TOKEN, '1', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['-', BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, '0', '0', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, BB_FILL_NUM_TOKEN, '1', '1', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EMPTY_TOKEN, '7', '9', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], ['-', BB_EMPTY_TOKEN, '6', '8', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, '0', '0', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_OPLINE_SEG_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN], [BB_EMPTY_TOKEN, '0', '1', '1', BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN, BB_EMPTY_TOKEN]],
+        [[BB_BOS_TOKEN, BB_EOS_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN], [BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN, BB_PAD_TOKEN]],
+    ]
+
+# --- 2. The Pytest Function ---
+
+def test_addition_board_sequence(setup_data_tmp_path, gen_spec, test_chain_data_add):
+    """
+    Tests the sequence of board states generated by the TokenizedBlackboardDataset
+    for a simple addition problem.
+    """
+    bb_spec = BlackboardSpec(5, 10, False, Addition())
+    data_path = os.path.join(setup_data_tmp_path, "bb_addition.pl")
+
+    dataset = TokenizedBlackboardDataset(
+        path=data_path,
+        regenerate=True, # Force regeneration for reliable testing
+        generation_spec=gen_spec,
+        blackboard_spec=bb_spec,
+    )
+
+    dl = DataLoader(dataset, batch_size=1, shuffle=False)
+    for i, (x,y) in enumerate(dl):
+        t_x = dataset.bb_2D_tokenizer.encode(test_chain_data_add[i])
+        t_y = dataset.bb_2D_tokenizer.encode(test_chain_data_add[i+1])
+
+        assert torch.equal(x['tokens'][0], t_x), f"Failed at sample {i}: Expected\n{t_x},\ngot\n{x['tokens'][0]}"
+        assert torch.equal(y['tokens'][0], t_y), f"Failed at sample {i}: Expected\n{t_y},\ngot\n{y['tokens'][0]}"
+
+
+def test_subtraction_board_sequence(setup_data_tmp_path, gen_spec, test_chain_data_sub):
+    """
+    Tests the sequence of board states generated by the TokenizedBlackboardDataset
+    for a simple subtraction problem.
+    """
+    bb_spec = BlackboardSpec(5, 10, False, Subtraction())
+    data_path = os.path.join(setup_data_tmp_path, "bb_subtraction.pl")
+
+    dataset = TokenizedBlackboardDataset(
+        path=data_path,
+        regenerate=True, # Force regeneration for reliable testing
+        generation_spec=gen_spec,
+        blackboard_spec=bb_spec,
+    )
+
+    dl = DataLoader(dataset, batch_size=1, shuffle=False)
+    for i, (x, y) in enumerate(dl):
+        t_x = dataset.bb_2D_tokenizer.encode(test_chain_data_sub[i])
+        t_y = dataset.bb_2D_tokenizer.encode(test_chain_data_sub[i+1])
+
+        assert torch.equal(x['tokens'][0], t_x), f"Failed at sample {i}: Expected\n{t_x},\ngot\n{x['tokens'][0]}"
+        assert torch.equal(y['tokens'][0], t_y), f"Failed at sample {i}: Expected\n{t_y},\ngot\n{y['tokens'][0]}"
+
+
 if __name__ == "__main__":
+    pytest.main()
 
-    # perform and inspect a demo operation
-    x = np.array([9, 9, 0, 9])
-    y = np.array([3, 9, 2, 9])
+    run_tmp_path = "tmp_bb_subtraction.pl"
+    # can add some visual testing of blackboard states
+    dataset = TokenizedBlackboardDataset(
+        path=os.path.join(run_tmp_path),
+        regenerate=True, # Force regeneration for reliable testing
+        generation_spec=GenerationSpec(size=1, low=10, high=99),
+        blackboard_spec=BlackboardSpec(10, 10, True, Addition()),
+    )
 
-    spec = BlackboardSpec(15, 15, True, Addition())
-    tokenizer = AutoTokenizer.from_pretrained("t5-small", use_fast=True)
+    dl = DataLoader(dataset, batch_size=1, shuffle=False)
+    for i, (x,y) in enumerate(dl):
+        print("X:")
+        bb_prettyprint(x["tokens"][0])
+        print("Y:")
+        bb_prettyprint(y["tokens"][0])
+        print(40*"=")
 
-    b = BasicOpBlackboardIterator(x, y, spec)
-    for board in b:
-        print(bb_tokinpt_to_str(board, BB_PAD_TOKEN, BB_ROW_SEP_TOKEN))
-
-    gen_spec = BASE_GEN_SPEC
-    gen_spec.size = 1
-    dataset = BasicOpBlackboardDataset(regenerate=True, blackboard_spec=BlackboardSpec(5, 15, True, Addition()))
-
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    tokenizer.add_special_tokens({'pad_token': BB_PAD_TOKEN, 'sep_token': BB_ROW_SEP_TOKEN})
-
-    # visually compare tokenized to expected blackboard
-    torch.set_printoptions(linewidth=200)
-
-    input_str = dataset[0]['input']
-    token_seq = tokenizer(dataset[0]['input'])['input_ids']
-
-    assert(len(token_seq) == len(input_str.split(" "))+2)
-    print(torch.tensor(token_seq[1:-1]).view((5,16))) #omit sequence start and sequence end
-    print(bb_tokinpt_to_str(dataset[0]['input'], BB_PAD_TOKEN, BB_ROW_SEP_TOKEN))
-    print(bb_tokinpt_to_str(dataset[0]['label'], BB_PAD_TOKEN, BB_ROW_SEP_TOKEN))
-
-    # some tokenizers split symbols into multiple tokens. We don't want that. Maybe think about it in next meeting.
-    t = AutoTokenizer.from_pretrained("t5-small")
-    print(t.encode("-", add_special_tokens=False))
+    # cleanup
+    os.remove(run_tmp_path)
