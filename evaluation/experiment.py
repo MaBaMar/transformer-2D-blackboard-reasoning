@@ -107,17 +107,15 @@ def ask(input, task, pipe, tok):
 
 def check_prediction(prediction: str, label: str, task) -> int:
     if task == "basic":
-        result_true = extract_label_number(label[0])
-        result_pred = extract_label_number(prediction[0])
-    elif task == "scratch_pad":
         result_true = int(label[0])
-        result_pred = int(prediction[0])
+    elif task == "scratch_pad":
+        result_true = extract_label_number(label[0])
     else:
         raise NotImplementedError()
 
-    print(f"result_true: {result_true} and result_pred: {result_pred}")
+    print(f"result_true: {result_true} and result_pred: {prediction}")
 
-    if int(result_true) == int(result_pred):
+    if result_true == prediction:
         return 1
 
     return 0
@@ -197,7 +195,7 @@ def experiment(
 
         prediction = ask(input_text, task, pipe, tok)
 
-        correct += check_prediction(prediction, label)
+        correct += check_prediction(prediction, label, task)
 
     acc = correct / size
 
