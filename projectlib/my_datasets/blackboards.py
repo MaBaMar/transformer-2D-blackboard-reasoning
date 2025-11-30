@@ -357,8 +357,8 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 
         return [{
             "tokens": bb.clone() if copy else bb,
-            "pos_row": torch.arange(H*W),
-            "pos_col": torch.arange(H*W).view(H, W).T.flatten()
+            "pos_row": torch.arange(H*W, dtype=torch.long),
+            "pos_col": torch.arange(H*W, dtype=torch.long).view(H, W).T.flatten()
         } for bb in bbs]
 
 
@@ -368,16 +368,17 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 #
 # They are not in the utils.py file to avoid circular imports.
 # ------------------------------------------------------------
-def bb_prettyprint(board: torch.Tensor):
+def bb_prettyprint(board: torch.Tensor, tokenizer: Optional[BBVocabTokenizer] = None):
     """
     Pretty-print a tokenized blackboard
 
     Args:
         board (torch.Tensor): The board to print.
     """
-    tok = BBVocabTokenizer()
+    tok = tokenizer or BBVocabTokenizer()
 
     decoded_board = tok.decode(board)
+    print((board.shape[1]+2) * "-")
     for i in range(len(decoded_board)):
         line = '|'
         for j in range(len(decoded_board[i])):

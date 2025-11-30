@@ -302,7 +302,7 @@ class _DecoderBlock(nn.Module):
             x = x + self.dropout(h2)
             return x
 
-class Edgar(nn.Module):
+class Edgar(BBChainGenerator):
     def __init__(
         self,
         vocab_size: int,
@@ -311,7 +311,8 @@ class Edgar(nn.Module):
         num_heads_decoder: int,
         n_encoder_blocks: int,
         n_decoder_blocks: int,
-        pad_id: int = 0
+        pad_id: int,
+        eos_id: int,
     ) -> None:
         """
         Implementation of our Edgar model.
@@ -325,9 +326,10 @@ class Edgar(nn.Module):
             n_decoder_blocks (int): Number of decoder blocks.
         """
         # TODO implement
-        super().__init__()
+        super().__init__() # to torch module
 
         self.pad_id = pad_id
+        self.eos_id = eos_id
 
         self.encoder = Encoder(
             vocab_size=vocab_size,
@@ -435,10 +437,10 @@ class Edgar(nn.Module):
         
         row = torch.zeros((B, 1), device=device, dtype=torch.long)
         col = torch.zeros((B, 1), device=device, dtype=torch.long)
-        out_ids = torch.full((B, 1), fill_value=self.pad_id, device=device, dtype=torch.long)
+        out_ids = torch.full((B, 1), fill_value=x_tokens[0, 0].item(), device=device, dtype=torch.long)
 
         # generate at most one full blackboard
-        max_new_tokens = L- 1  
+        max_new_tokens = L - 1
 
         out_tokens = self.decoder.generate(
             input_ids=out_ids,
@@ -450,15 +452,7 @@ class Edgar(nn.Module):
             context_pos_col=x_pos_col,
             context_key_padding_mask=x_key_padding_mask,
             pad_id=self.pad_id,
+            eos_id=self.eos_id,
         )
 
         return out_tokens
-
-"""
-Note:
-    - what remains is some kind of wrapper around the Edgar model that repeatedly calls next_state until an EOS state is reached.
-    - the wrapper should also maybe have a max number of iterations to prevent infinite loops.
-    - moreover, the wrapper is responsible for extending the output of next_state to a valid input for the next call by adding the positional encodings etc...
-    - we can implement this in the model itself or somewhere else.
-    - a dummy training loop should be written to test the model implementation for bugs.
-"""
