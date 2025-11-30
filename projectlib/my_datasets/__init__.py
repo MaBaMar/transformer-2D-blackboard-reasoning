@@ -2,12 +2,12 @@
 from .base import GeneratedDataset, GenerationSpec
 from .additions import AdditionDataset
 from .scratchpads import ScratchpadDataset
-from .blackboards import BasicOpBlackboardDataset
+from .blackboards import TokenizedBlackboardDataset
 
 __all__ = [
     "GeneratedDataset",
     "GenerationSpec",
     "AdditionDataset",
     "ScratchpadDataset",
-    "BasicOpBlackboardDataset",
+    "TokenizedBlackboardDataset",
 ]
