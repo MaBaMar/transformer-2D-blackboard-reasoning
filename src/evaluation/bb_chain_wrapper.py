@@ -6,13 +6,21 @@
 # ------------------------------------------------------------
 
 from dataclasses import dataclass
+from logging import getLogger, warning
 import torch
+import numpy as np
 
-from projectlib.my_datasets.blackboards import BlackboardSpec
+from projectlib.my_datasets._blackboard_operands import Subtraction
+from projectlib.my_datasets.blackboards import BasicOpBlackboardIterator, BlackboardSpec, BBVocabTokenizer, bb_prettyprint
+from projectlib.wrappertypes import BBChainGenerator, BBEndOfChainException
 
 @dataclass
 class BBChain:
-    steps: list[str]
+    tokenizer: BBVocabTokenizer
+    steps: list[torch.Tensor]
+    board_height: int
+    board_width: int
+    _negres: bool = False       # might need to change the result sign for subtraction
 
     @property
     def result(self) -> int:
@@ -20,14 +28,22 @@ class BBChain:
         # TODO: implement this method
         raise NotImplementedError("BBChain.result is not implemented")
 
+    def show_steps(self):
+        print(f"BBChain(board_height={self.board_height}, board_width={self.board_width},\nsteps=[")
+        for step in self.steps:
+            bb_prettyprint(step.view(self.board_height, self.board_width), self.tokenizer)
+        print("])")
+
 class BBChainReasoner:
-    def __init__(self, bb_model: torch.nn.Module | str, device: torch.device, bb_spec: BlackboardSpec):
+    def __init__(self, bb_model: BBChainGenerator | str, device: torch.device, bb_spec: BlackboardSpec, timeout_iters: int = 100, tokenizer: BBVocabTokenizer | None = None):
         """End to end algorithmic reasoning wrapper
 
         Args:
-            bb_model (torch.nn.Module | str): The blackboard model to use, either as a pretrained model or a path to a saved model.
+            bb_model (torch.nn.Module | str): The blackboard model to use, either as a pretrained model or a path to a saved model. Should also support the BBChainGenerator interface.
             device (torch.device): The device on which to compute inference.
             bb_spec (BlackboardSpec): The blackboard specification to use for blackboard generation. This MUST be compatible with the blackboard model.
+            timeout_iters (int): The maximum number of iterations in any generation process before aborting.
+            tokenizer (BBVocabTokenizer | None): The tokenizer to use for blackboard generation. If None, a default tokenizer will be used.
         """
         if isinstance(bb_model, str):
             self.model = torch.load(bb_model).to(device)
@@ -37,11 +53,106 @@ class BBChainReasoner:
         self.model.eval()
         self.device = device
         self.spec = bb_spec
+        self._timeout = timeout_iters
+        self._tok = tokenizer or BBVocabTokenizer()
+        self.logger = getLogger(__name__)
 
     def compute_from_blackboard(self, blackboard: torch.Tensor) -> BBChain:
-        # TODO: implement this method
-        raise NotImplementedError("BBChainReasoner.compute_from_blackboard is not implemented")
+        """
+        Computes a BBChain from a blackboard.
+
+        Args:
+            blackboard (torch.Tensor): The blackboard to compute from. Sould be either of shape (H,W) or (H*W).
+
+        Returns:
+            BBChain: The computed BBChain.
+        """
+
+        assert blackboard.shape == (self.spec.height, self.spec.width) or blackboard.shape == (self.spec.height * self.spec.width,), "Blackboard shape must match specification (you may need to remove the batch dimension)"
+
+        blackboard = blackboard.flatten().to(self.device)
+        H, W = self.spec.height, self.spec.width
+        _pos_row = torch.arange(H*W, device=self.device, dtype=torch.long)
+        _pow_col = torch.arange(H*W, device=self.device, dtype=torch.long).view(H, W).T.flatten()
+        _pad_mask = blackboard == self._tok.pad_id
+
+        # add a batch dimension of 1 and do inference
+        return self.compute_from_input((blackboard[None, ...], _pos_row[None, ...], _pow_col[None, ...], _pad_mask[None, ...]))
 
     def compute_from_operands(self, operand1: int, operand2: int) -> BBChain:
-        # TODO: implement this method
-        raise NotImplementedError("BBChainReasoner.compute_from_operands is not implemented")
+
+        assert operand1 >= 0 and operand2 >= 0, "Operands must be non-negative"
+
+        swapped: bool = False
+
+        # order the operands
+        if isinstance(self.spec.operation, Subtraction) and operand1 < operand2:
+            operand1, operand2 = operand2, operand1
+            swapped = True
+
+        # convert operands to blackboard
+        max_input_length = max(np.ceil(np.log10(operand1)).astype(np.int32), np.ceil(np.log10(operand2)).astype(np.int32))
+
+        # fast conversion
+        digits_a = np.empty(max_input_length, dtype=int)
+        digits_b = np.empty(max_input_length, dtype=int)
+        for i in range(max_input_length):
+            digits_a[max_input_length - i - 1] = operand1 % 10
+            operand1 //= 10
+            digits_b[max_input_length - i - 1] = operand2 % 10
+            operand2 //= 10
+
+        opframe_generator = BasicOpBlackboardIterator(digits_a, digits_b, self.spec.operation)
+        # only care about first state
+        st: list[list[str]] = next(opframe_generator)
+
+        # randomize the position
+        p_x = 0
+        p_y = 0
+
+        if self.spec.randomize_position:
+            r_max_x = self.spec.width - opframe_generator.frame_width
+            r_max_y = self.spec.height - opframe_generator.frame_height
+            if r_max_x > 0:
+                p_x = np.random.randint(0, r_max_x)
+            if r_max_y > 0:
+                p_y = np.random.randint(0, r_max_y)
+
+        blackboard = torch.full((self.spec.height, self.spec.width), self._tok.empty_id, dtype=torch.long, device=self.device)
+        blackboard[p_y:p_y + opframe_generator.frame_height, p_x:p_x + opframe_generator.frame_width] = self._tok.encode(st)
+
+        # set BOS token
+        blackboard[0, 0] = self._tok.bos_id
+
+        res: BBChain = self.compute_from_blackboard(blackboard)
+        res._negres = swapped
+
+        return res
+
+    def compute_from_input(self, x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> BBChain:
+        """
+        Compute a blackboard chain from a given input.
+
+        Args:
+            x: A tuple of tensors representing the input. Expected to be on the right device.
+
+        Returns:
+            A BBChain object.
+        """
+        steps: list[torch.Tensor] = []
+
+        for i in range(self._timeout):
+            steps.append(x[0])
+            self.logger.debug(f"Step {i}: attempting to generate next state")               # some logging. Probably helpful for later
+            try:    # try to generate the next state
+                bb_next = self.model.next_state(x)
+                self.logger.debug(f"generated state\n{bb_next}")
+                x = (bb_next, *x[1:])
+                self.logger.debug(f"Step {i}: next state successfully generated")
+            except BBEndOfChainException:   # next state is END OF BOARD CHAIN
+                # signal indicates that an End Of Chain state has been reached! we want to get here!
+                self.logger.debug(f"Step {i}: reached end of chain")
+                return BBChain(self._tok, steps, self.spec.height, self.spec.width)
+
+        self.logger.warning("Reasoning chain generation timed-out after {} iterations. Please make sure your model is properly trained.".format(self._timeout))
+        return BBChain(self._tok, steps, self.spec.height, self.spec.width)
