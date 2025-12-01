@@ -91,7 +91,7 @@ class BBChainReasoner:
             swapped = True
 
         # convert operands to blackboard
-        max_input_length = max(np.ceil(np.log10(operand1)).astype(np.int32), np.ceil(np.log10(operand2)).astype(np.int32))
+        max_input_length = max(np.floor(np.log10(operand1)).astype(np.int32), np.floor(np.log10(operand2)).astype(np.int32)) + 1
 
         # fast conversion
         digits_a = np.empty(max_input_length, dtype=int)
