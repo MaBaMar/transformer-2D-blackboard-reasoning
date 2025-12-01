@@ -3,7 +3,6 @@ import torch
 import logging
 
 from src.models.edgar import Edgar
-from src.evaluation.bb_chain_wrapper import BBChain, BBChainReasoner
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, BlackboardSpec, Addition, bb_datasample_prettyprint
 from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
 
@@ -67,11 +66,7 @@ def check(train = False):
     else:
         model.load_state_dict(torch.load("model.pth"))
 
-    reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=2)
-
     print("Model loaded")
-    st: BBChain = reasoner.compute_from_operands(3, 3)
-    st.show_steps()
 
 
 if __name__ == "__main__":
