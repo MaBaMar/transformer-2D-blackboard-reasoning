@@ -130,7 +130,6 @@ class Decoder(nn.Module):
         num_blocks: int,
         dropout: float = 0.1,
     ) -> None:
-        # TODO implement
         super().__init__()
         self.d_model = d_model
         self.tok_emb = nn.Embedding(vocab_size, d_model)
@@ -161,8 +160,6 @@ class Decoder(nn.Module):
         Outputs logits and loss. The target is the same as the input (we use teacher forcing)
         No need to compute "real logits", i.e applying softmax, as we can also argmax over logits without softmax for generation
         """
-        # TODO implement
-        # dummy placeholders
 
         x = self.tok_emb(input_ids) * math.sqrt(self.d_model)
         x = self.dropout(x)
@@ -195,8 +192,6 @@ class Decoder(nn.Module):
     def generate(
         self,
         input_ids: torch.Tensor,
-        pos_row: torch.Tensor,
-        pos_col: torch.Tensor, 
         max_new_tokens: int,
         context: torch.Tensor,
         context_pos_row: torch.Tensor,
@@ -208,24 +203,21 @@ class Decoder(nn.Module):
         """
         Outputs the next token for the model
         """
-        # TODO: implement (can also move this to somewhere else, especially if we want to use stuff like beam search later on)
         self.eval()
 
         out_ids = input_ids.clone()
-        row = pos_row.clone()
-        col = pos_col.clone()
 
         W = int(context_pos_col.max().item()) + 1
 
         if pad_id is None:
             pad_id = 0
 
-        for _ in range(max_new_tokens):
+        for i in range(max_new_tokens):
             key_padding_mask = (out_ids == pad_id)
             logits, _ = self.forward(
                 input_ids=out_ids,
-                pos_row=row,
-                pos_col=col,
+                pos_row=context_pos_row[:, :i+1],
+                pos_col=context_pos_col[:, :i+1],
                 context=context,
                 context_pos_row=context_pos_row,
                 context_pos_col=context_pos_col,
@@ -236,16 +228,8 @@ class Decoder(nn.Module):
 
 
             next_token = logits[:, -1].argmax(dim=-1)  # greedy
-            out_ids = torch.cat([out_ids, next_token.unsqueeze(-1)], dim=-1)
 
-            last_row = row[:, -1]
-            last_col = col[:, -1]
-            next_col_candidate = last_col + 1
-            line_break = (next_col_candidate >= W)
-            next_row = torch.where(line_break, last_row + 1, last_row)
-            next_col = torch.where(line_break, torch.zeros_like(next_col_candidate), next_col_candidate)
-            row = torch.cat([row, (next_row).unsqueeze(-1)], dim=-1) 
-            col = torch.cat([col, (next_col).unsqueeze(-1)], dim=-1)
+            out_ids = torch.cat([out_ids, next_token.unsqueeze(-1)], dim=-1)
 
             if eos_id is not None and bool((next_token == eos_id).all()):
                 break
@@ -325,7 +309,6 @@ class Edgar(BBChainGenerator):
             n_encoder_blocks (int): Number of encoder blocks.
             n_decoder_blocks (int): Number of decoder blocks.
         """
-        # TODO implement
         super().__init__() # to torch module
 
         self.pad_id = pad_id
@@ -367,7 +350,6 @@ class Edgar(BBChainGenerator):
         Returns:
             Probably sth suitable for both generation and training
         """
-        # TODO implement
         # Unpack input
         x_tokens: torch.Tensor = x[0]
         x_pos_row: torch.Tensor = x[1]
@@ -388,15 +370,15 @@ class Edgar(BBChainGenerator):
         )
 
         logits, loss = self.decoder(
-            input_ids=y_tokens,
-            pos_row=y_pos_row,
-            pos_col=y_pos_col,
+            input_ids=y_tokens[:, :-1], # evtl add .contiguous here to speed up later operations?
+            pos_row=y_pos_row[:, :-1],  # not sure if copying is worth it though
+            pos_col=y_pos_col[:, :-1],
             context=context,
             context_pos_row = x_pos_row,
             context_pos_col = x_pos_col,
             key_padding_mask=y_key_padding_mask,
             context_key_padding_mask = x_key_padding_mask,
-            targets=y_tokens,
+            targets=y_tokens[:, 1:].contiguous(),
         )
 
         return logits, loss
@@ -434,9 +416,7 @@ class Edgar(BBChainGenerator):
             pos_row=x_pos_row,
             pos_col=x_pos_col,
             )
-        
-        row = torch.zeros((B, 1), device=device, dtype=torch.long)
-        col = torch.zeros((B, 1), device=device, dtype=torch.long)
+
         out_ids = torch.full((B, 1), fill_value=x_tokens[0, 0].item(), device=device, dtype=torch.long)
 
         # generate at most one full blackboard
@@ -444,8 +424,6 @@ class Edgar(BBChainGenerator):
 
         out_tokens = self.decoder.generate(
             input_ids=out_ids,
-            pos_row=row,
-            pos_col=col,
             max_new_tokens=max_new_tokens,
             context=context,
             context_pos_row=x_pos_row,
