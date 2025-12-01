@@ -1,5 +1,6 @@
 # minimal training script for Edgar model
 import argparse
+import os
 import torch
 import wandb
 import numpy as np
@@ -14,10 +15,31 @@ from projectlib.my_datasets.collators import collate_blackboards, make_collator_
 
 
 
+MODELS_PATH = "./models/"
+
+
+
+def compute_accuracy(logits, labels, pad_id=None):
+    labels = labels[0]
+    preds = logits.argmax(dim=-1)
+    
+    labels = labels.reshape(-1)
+    preds = preds.reshape(-1)
+
+    if pad_id is not None:
+        mask = (labels != pad_id).float()
+        correct = (preds == labels).float() * mask
+        return correct.sum().item() / mask.sum().item()
+    else:
+        return (preds == labels).float().mean().item()
+
+
+
 def train(
         name: str,
         model_name: str,
-        size: int,
+        train_size: int,
+        eval_size: int,
         digits: int,
         batch_size: int,
         model_dimension: int,
@@ -33,7 +55,8 @@ def train(
         project="blackboard-reasoning",
         config={
             "model": model_name,
-            "size": size,
+            "train_size": train_size,
+            "eval_size": eval_size,
             "digits": digits,
             "batch_size": batch_size,
             "model_dimension": model_dimension,
@@ -47,19 +70,43 @@ def train(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    spec = GenerationSpec(
-        size = size,
-        low = 10**(digits - 1),
-        high = 10**(digits)
+    bb_dataset_train = TokenizedBlackboardDataset(
+        regenerate=True,
+        seed=seed,
+        generation_spec=GenerationSpec.digits(
+            size=train_size,
+            digits=digits
+        ),
     )
 
-    bb_dataset = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec)
+    bb_dataset_eval = TokenizedBlackboardDataset(
+        regenerate=True,
+        train=False,
+        seed=seed,
+        generation_spec=GenerationSpec.digits(
+            size=eval_size,
+            digits=digits
+        ),
+    )
+
+    pad_id = bb_dataset_train.bb_2D_tokenizer.pad_id
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    vocab_size = bb_dataset.bb_2D_tokenizer.vocab_size
+    vocab_size = bb_dataset_train.bb_2D_tokenizer.vocab_size
 
-    collate_fn = make_collator_with_args(collate_blackboards, pad_token_id=bb_dataset.bb_2D_tokenizer.pad_id, device=device)
-    data_loader = DataLoader(bb_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    collate_fn = make_collator_with_args(collate_blackboards, pad_token_id=pad_id, device=device)
+    train_loader = DataLoader(
+        bb_dataset_train, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        collate_fn=collate_fn
+    )
+    eval_loader = DataLoader(
+        bb_dataset_eval, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        collate_fn=collate_fn
+    )
 
     print("Data loaded")
 
@@ -70,17 +117,23 @@ def train(
         num_heads_decoder=4,
         n_encoder_blocks=2,
         n_decoder_blocks=2,
-        pad_id=bb_dataset.bb_2D_tokenizer.pad_id
+        pad_id=pad_id
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
 
-    model.train()
-
     print("Model initialized")
 
     for epoch in tqdm(range(epochs)):
-        for step, (x_batch, y_batch) in enumerate(data_loader):
+
+        #   Train the model on the training set
+
+        model.train()
+
+        train_acc = 0.0
+        train_loss = 0.0
+
+        for step, (x_batch, y_batch) in enumerate(train_loader):
             optimizer.zero_grad()
 
             logits, loss = model(x_batch, y_batch)
@@ -95,7 +148,58 @@ def train(
                 "loss": loss.item(),
             })
 
+            train_acc += compute_accuracy(logits, y_batch, pad_id)
+            train_loss += loss.item()
+
+        train_acc /= len(train_loader)
+        train_loss /= len(train_loader)
+
+        #   Compute performance on evaluation set
+
+        model.eval()
+
+        eval_acc = 0.0
+        eval_loss = 0.0
+
+        with torch.no_grad():
+            for x_batch, y_batch in eval_loader:
+                logits, loss = model(x_batch, y_batch)
+
+                eval_acc += compute_accuracy(logits, y_batch, pad_id)
+                eval_loss += loss.item()
+
+        eval_acc /= len(eval_loader)
+        eval_loss /= len(eval_loader)
+
+        wandb.log({
+            "epoch": epoch,
+            "train_acc": train_acc,
+            "train_loss": train_loss,
+            "eval_acc": eval_acc,
+            "eval_loss": eval_loss,
+        })
+
     wandb.finish()
+
+    print("Training finished! Saving model ...")
+
+    if not os.path.exists(MODELS_PATH):
+        os.makedirs(MODELS_PATH)
+
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_e{epochs}_s{train_size}_d{digits}_md{model_dimension}.pt")
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "config": {
+            "vocab_size": vocab_size,
+            "d_model": model_dimension,
+            "num_heads_encoder": 4,
+            "num_heads_decoder": 4,
+            "n_encoder_blocks": 2,
+            "n_decoder_blocks": 2,
+        }
+    }, save_path)
+
+    print(f"Model saved to {save_path}.")
 
 
 
@@ -104,7 +208,8 @@ def main(args):
         name=args.name,
         model_name=args.model_name,
         digits=args.digits,
-        size=args.size,
+        train_size=args.train_size,
+        eval_size=args.eval_size,
         batch_size=args.batch_size,
         model_dimension=args.model_dimension,
         learning_rate=args.learning_rate,
@@ -120,7 +225,8 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str)
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--digits", type=int)
-    parser.add_argument("--size", type=int)
+    parser.add_argument("--train_size", type=int)
+    parser.add_argument("--eval_size", type=int)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--learning_rate", type=float)

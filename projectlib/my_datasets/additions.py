@@ -45,6 +45,7 @@ class AdditionDataset(GeneratedDataset):
         path: Optional[str] = None,
         tokenizer: Optional[TokenizerType] = None,
         train: bool = True,
+        seed: Optional[int] = None,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_SPEC,
         operand: Operation = "+",
@@ -60,6 +61,7 @@ class AdditionDataset(GeneratedDataset):
             regenerate=regenerate,
             generation_spec=generation_spec,
             train=train,
+            seed=seed,
         )
 
     @override
