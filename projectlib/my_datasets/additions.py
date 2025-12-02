@@ -3,16 +3,15 @@ import torch
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from typing import override, TypeAlias, Union, Optional
 
-from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
+from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split
 from projectlib.my_datasets._operands import OPERATION, Operation
 from projectlib.my_datasets.utils import num_to_str
 
 
+
 EVAL_PATH = "datasets/additions_eval.pt"
-TRAIN_PATH = "datasets/additions_train.pt"
 
 
-BASE_SPEC = GenerationSpec(10, 10, 20)
 
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
@@ -42,36 +41,37 @@ class AdditionDataset(GeneratedDataset):
 
     def __init__(
         self,
+        generation_spec: GenerationSpec,
         path: Optional[str] = None,
         tokenizer: Optional[TokenizerType] = None,
-        train: bool = True,
         seed: Optional[int] = None,
         regenerate: bool = False,
-        generation_spec: GenerationSpec = BASE_SPEC,
         operand: Operation = "+",
         spaces: bool = False,
     ):
         self.operand = operand
         self.spaces = spaces
 
-        path = path if path else (TRAIN_PATH if train else EVAL_PATH)
+        path = path if path else EVAL_PATH
         super().__init__(
             path=path,
             tokenizer=tokenizer,
             regenerate=regenerate,
             generation_spec=generation_spec,
-            train=train,
             seed=seed,
         )
 
     @override
-    def __generate__(self, spec: GenerationSpec):
+    def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL):
         """Generate the addition dataset"""
+
+        if split != Split.EVAL:
+            raise ValueError("For this dataset you should only use the evaluation split!")
 
         inputs = []
         labels = []
 
-        for _ in range(spec.size):
+        for _ in range(spec.eval_size):
             a = torch.randint(spec.low, spec.high, (1,)).item()
             b = torch.randint(spec.low, spec.high, (1,)).item()
 
