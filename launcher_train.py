@@ -14,11 +14,11 @@ LOGGING = "wandb"   # "wandb", "local", "none"
 #
 
 applicable_configs = {
-    "seed": [i for i in range(2)],
-    "digits": [5],
-    "train_sizes": [256],
-    "eval_sizes": [64],
-    "batch_size": [16],
+    "seed": [i for i in range(1)],
+    "digits": [3],
+    "train_sizes": [64],
+    "eval_sizes": [16],
+    "batch_size": [1],      # Has to be 1 for now because of the sequence length problem!
     "model_spec": [
         # Model size: 7 Million
         { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 64, "n_decoder_blocks": 64 },

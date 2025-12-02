@@ -28,6 +28,9 @@ def compute_accuracy(logits, labels, pad_id=None):
     labels = labels.reshape(-1)
     preds = preds.reshape(-1)
 
+    if labels.shape != preds.shape:
+        return 0
+
     if pad_id is not None:
         mask = (labels != pad_id).float()
         correct = (preds == labels).float() * mask
@@ -148,11 +151,11 @@ def train(
         for step, (x_batch, y_batch) in enumerate(train_loader):
             optimizer.zero_grad()
 
-                logits, loss = model(x_batch, y_batch)
+            logits, loss = model(x_batch, y_batch)
 
-                # Backward pass
-                loss.backward()
-                optimizer.step()
+            # Backward pass
+            loss.backward()
+            optimizer.step()
 
             wandb.log({
                 "epoch": epoch,
@@ -234,12 +237,6 @@ def main(args):
         logging=args.logging,
     )
 
-
-        torch.save(model.state_dict(), "model.pth")
-    else:
-        model.load_state_dict(torch.load("model.pth"))
-
-    print("Model loaded")
 
 
 if __name__ == "__main__":
