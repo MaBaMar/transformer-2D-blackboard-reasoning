@@ -43,6 +43,10 @@ def train(
         digits: int,
         batch_size: int,
         model_dimension: int,
+        num_heads_encoder: int,
+        num_heads_decoder: int,
+        n_encoder_blocks: int,
+        n_decoder_blocks: int,
         learning_rate: float,
         epochs: int,
         seed: int,
@@ -60,6 +64,10 @@ def train(
             "digits": digits,
             "batch_size": batch_size,
             "model_dimension": model_dimension,
+            "num_heads_encoder": num_heads_encoder,
+            "num_heads_decoder": num_heads_decoder,
+            "n_encoder_blocks": n_encoder_blocks,
+            "n_decoder_blocks": n_decoder_blocks,
             "learning_rate": learning_rate,
             "epochs": epochs,
             "seed": seed,
@@ -108,21 +116,22 @@ def train(
         collate_fn=collate_fn
     )
 
-    print("Data loaded")
+    print("Data loaded.")
 
     model = Edgar(
         vocab_size=vocab_size,
         d_model=model_dimension,
-        num_heads_encoder=4,
-        num_heads_decoder=4,
-        n_encoder_blocks=2,
-        n_decoder_blocks=2,
-        pad_id=pad_id
+        num_heads_encoder=num_heads_encoder,
+        num_heads_decoder=num_heads_decoder,
+        n_encoder_blocks=n_encoder_blocks,
+        n_decoder_blocks=n_decoder_blocks,
+        pad_id=pad_id,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
 
-    print("Model initialized")
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Model initialized with {num_params} parameters.")
 
     for epoch in tqdm(range(epochs)):
 
@@ -212,6 +221,10 @@ def main(args):
         eval_size=args.eval_size,
         batch_size=args.batch_size,
         model_dimension=args.model_dimension,
+        num_heads_encoder=args.num_heads_encoder,
+        num_heads_decoder=args.num_heads_decoder,
+        n_encoder_blocks=args.n_encoder_blocks,
+        n_decoder_blocks=args.n_decoder_blocks,
         learning_rate=args.learning_rate,
         epochs=args.epochs,
         seed=args.seed,
@@ -229,6 +242,10 @@ if __name__ == "__main__":
     parser.add_argument("--eval_size", type=int)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--model_dimension", type=int)
+    parser.add_argument("--num_heads_encoder", type=int)
+    parser.add_argument("--num_heads_decoder", type=int)
+    parser.add_argument("--n_encoder_blocks", type=int)
+    parser.add_argument("--n_decoder_blocks", type=int)
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--seed", type=int, default=0)
