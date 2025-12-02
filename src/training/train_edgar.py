@@ -10,17 +10,19 @@ from projectlib.my_datasets.collators import collate_blackboards, make_collator_
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
+MODEL_NAME = "model.pth"
+
 def check(train = False):
 
     spec = GenerationSpec(
-        size = 1,
-        low = 80,
-        high = 200
+        size = 20000,
+        low = 1,
+        high = 1000
     )
 
-    bb_spec = BlackboardSpec(8, 10, True, Addition())
+    bb_spec = BlackboardSpec(5, 10, False, Addition())
 
-    bb_dataset = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec)
+    bb_dataset = TokenizedBlackboardDataset(regenerate=False, generation_spec=spec, blackboard_spec=bb_spec)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     B = 64
@@ -60,24 +62,34 @@ def check(train = False):
 
                 print(f"Epoch {epoch}, Step {step}, Loss: {loss.item()}")
 
-        torch.save(model.state_dict(), "model.pth")
+        torch.save(model.state_dict(), MODEL_NAME)
     else:
-        model.load_state_dict(torch.load("model.pth"))
+        model.load_state_dict(torch.load(MODEL_NAME))
 
     reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
 
     print("Model loaded")
-    st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
-    st.show_steps()
+    # st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
+    # st.show_steps()
 
-    st = reasoner.compute_from_operands(50, 80)
+    st = reasoner.compute_from_operands(20, 30)
     st.show_steps()
+    print("Result is: ", st.result)
 
-    st = reasoner.compute_from_operands(150, 280)
-    st.show_steps()
 
-    st = reasoner.compute_from_operands(909, 256)
+    st = reasoner.compute_from_operands(5, 19)
     st.show_steps()
+    print("Result is: ", st.result)
+
+    st = reasoner.compute_from_operands(241, 389)
+    st.show_steps()
+    print("Result is: ", st.result)
+
+    # st = reasoner.compute_from_operands(150, 280)
+    # st.show_steps()
+
+    # st = reasoner.compute_from_operands(909, 256)
+    # st.show_steps()
 
     # for x, y in data_loader:
     #     print(model.forward(x, y)[0].argmax(dim=-1))
