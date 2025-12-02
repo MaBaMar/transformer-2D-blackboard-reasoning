@@ -5,8 +5,7 @@
 # interface for model prompting to the user, facilitating benchmarking, testing, and debugging.
 # ------------------------------------------------------------
 
-from dataclasses import dataclass
-from logging import getLogger, warning
+from logging import getLogger
 import torch
 import numpy as np
 
@@ -14,19 +13,68 @@ from projectlib.my_datasets._blackboard_operands import Subtraction
 from projectlib.my_datasets.blackboards import BasicOpBlackboardIterator, BlackboardSpec, BBVocabTokenizer, bb_prettyprint
 from projectlib.wrappertypes import BBChainGenerator, BBEndOfChainException
 
-@dataclass
+ASCII_NUMBERS = "0123456789"
+
 class BBChain:
     tokenizer: BBVocabTokenizer
     steps: list[torch.Tensor]
     board_height: int
     board_width: int
-    _negres: bool = False       # might need to change the result sign for subtraction
+
+
+    def __init__(self, tokenizer: BBVocabTokenizer, steps: list[torch.Tensor], board_height: int, board_width: int):
+        self.tokenizer = tokenizer
+        self.steps = steps
+        self.board_height = board_height
+        self.board_width = board_width
+
+        self._negres: bool = False       # might need to change the result sign for subtraction
+        self._intres_cache: int | None = None
+        self._intres_cache_set: bool = False
+
+    def set_negres(self, negres: bool):
+        """Sets the negres flag to the given value. """
+        self._negres = negres
 
     @property
-    def result(self) -> int:
+    def result(self) -> int | None:
+        """
+        Returns the result of the BBChain computation as an integer. The result is encoded in the last step of the chain.
+        Returns None if the chain is incomplete or the result invalid.
+        """
+
+        if(self._intres_cache_set):
+            return self._intres_cache
+
+        self._intres_cache_set = True
+
+        if len(self.steps) == 0:
+            return None
+
         # detokenize and extract the result as an integer
-        # TODO: implement this method
-        raise NotImplementedError("BBChain.result is not implemented")
+        final_state = self.tokenizer.decode(self.steps[-1].view(self.board_height, self.board_width))
+
+        # look for last non-empty line, this line should hold the result
+        for i in range(self.board_height-1, 3, -1): # result cannot appear in the first four lines
+            if not self._is_empty_line(final_state[i]):
+                ans_str: str = "".join(filter(lambda x: x in ASCII_NUMBERS, final_state[i]))
+                if(len(ans_str) == 0):
+                    return None
+
+                if self._negres:
+                    self._intres_cache = -int(ans_str)
+                else:
+                    self._intres_cache = int(ans_str)
+                return self._intres_cache
+
+        # result not found
+        return None
+
+    def _is_empty_line(self, line: list[str]) -> bool:
+        for token in line:
+            if token != self.tokenizer.empty_id:
+                return False
+        return True
 
     def show_steps(self):
         print(f"BBChain(board_height={self.board_height}, board_width={self.board_width},\nsteps=[")
@@ -125,7 +173,7 @@ class BBChainReasoner:
         blackboard[0, 0] = self._tok.bos_id
 
         res: BBChain = self.compute_from_blackboard(blackboard)
-        res._negres = swapped
+        res.set_negres(swapped)
 
         return res
 
