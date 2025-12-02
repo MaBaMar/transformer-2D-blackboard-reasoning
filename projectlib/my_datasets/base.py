@@ -27,9 +27,7 @@ class GenerationSpec:
         """
         Alternate constructor that sets low/high based on number of digits.
         """
-        low = 10 ** (digits - 1)
-        high = 10 ** digits
-        return GenerationSpec(size, low, high)
+        return GenerationSpec(size, low=1, high=10**digits)
 
 
 class GeneratedDataset(Dataset, ABC):
