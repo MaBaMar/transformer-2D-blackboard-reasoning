@@ -16,7 +16,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
-from projectlib.wrappertypes import BBEndOfChainException, BBChainGenerator
+from projectlib.wrappertypes import BBChainGenerator
 
 class FeedForward(nn.Module):
     def __init__(
@@ -195,28 +195,21 @@ class Decoder(nn.Module):
         input_ids: torch.Tensor,
         max_new_tokens: int,
         context: torch.Tensor,
+        pad_id: int,
         context_pos_row: torch.Tensor,
         context_pos_col: torch.Tensor,
         context_key_padding_mask: Optional[torch.Tensor] = None,
-        eos_id: Optional[int] = None,
-        pad_id: Optional[int] = None,
     ):
         """
-        Outputs the next token for the model
+        Generates the next max_new_tokens tokens of the blackboard for each batch. If an EOS token is generated, the generation continues
+        as to support batched generation. It is the responsibility of the user to ignore tokens generated after the EOS token.
         """
         self.eval()
 
-        out_ids = input_ids.clone()
-
-        W = int(context_pos_col.max().item()) + 1
-
-        if pad_id is None:
-            pad_id = 0
-
         for i in range(max_new_tokens):
-            key_padding_mask = (out_ids == pad_id)
+            key_padding_mask = (input_ids == pad_id)
             logits, _ = self.forward(
-                input_ids=out_ids,
+                input_ids=input_ids,
                 pos_row=context_pos_row[:, :i+1],
                 pos_col=context_pos_col[:, :i+1],
                 context=context,
@@ -227,15 +220,10 @@ class Decoder(nn.Module):
                 targets=None,
             )
 
-
             next_token = logits[:, -1].argmax(dim=-1)  # greedy
+            input_ids = torch.cat([input_ids, next_token.unsqueeze(-1)], dim=-1)
 
-            out_ids = torch.cat([out_ids, next_token.unsqueeze(-1)], dim=-1)
-
-            if eos_id is not None and bool((next_token == eos_id).all()):
-                raise BBEndOfChainException()
-
-        return out_ids
+        return input_ids
 
 class _DecoderBlock(nn.Module):
         def __init__(
@@ -265,7 +253,6 @@ class _DecoderBlock(nn.Module):
             context_pos_col: Optional[torch.Tensor] = None,
             context_key_padding_mask: Optional[torch.Tensor] = None,
         ) -> torch.Tensor:
-
 
             # pre-norm + attention
             h = self.ln1(x)
@@ -297,7 +284,6 @@ class Edgar(BBChainGenerator):
         n_encoder_blocks: int,
         n_decoder_blocks: int,
         pad_id: int,
-        eos_id: int,
     ) -> None:
         """
         Implementation of our Edgar model.
@@ -313,7 +299,6 @@ class Edgar(BBChainGenerator):
         super().__init__() # to torch module
 
         self.pad_id = pad_id
-        self.eos_id = eos_id
 
         self.encoder = Encoder(
             vocab_size=vocab_size,
@@ -327,8 +312,6 @@ class Edgar(BBChainGenerator):
             num_heads=num_heads_decoder,
             num_blocks=n_decoder_blocks
         )
-
-        pass
 
     def forward(
         self,
@@ -384,11 +367,20 @@ class Edgar(BBChainGenerator):
 
         return logits, loss
 
-
+    @torch.no_grad()    # disable gradient computation
     def next_state(
         self,
         x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-    ):
+    ) -> torch.Tensor:
+        """
+        Generates the next state of the blackboard given the current state.
+
+        Args:
+            x (tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]): Input tensors containing token IDs, row positions, column positions, and key padding masks. Each tensor has shape (B, L) where L is the sequence length (height*width).
+
+        Returns:
+            torch.Tensor: The next state of the blackboard.
+        """
         x_tokens: torch.Tensor = x[0]
         x_pos_row: torch.Tensor = x[1]
         x_pos_col: torch.Tensor = x[2]
@@ -403,6 +395,7 @@ class Edgar(BBChainGenerator):
             pos_col=x_pos_col,
             )
 
+        # this assumes that all blackboards start with a <BOS> token
         out_ids = torch.full((B, 1), fill_value=x_tokens[0, 0].item(), device=device, dtype=torch.long)
 
         # generate at most one full blackboard
@@ -416,7 +409,6 @@ class Edgar(BBChainGenerator):
             context_pos_col=x_pos_col,
             context_key_padding_mask=x_key_padding_mask,
             pad_id=self.pad_id,
-            eos_id=self.eos_id,
         )
 
         return out_tokens
