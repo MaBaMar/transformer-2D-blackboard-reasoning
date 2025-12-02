@@ -237,12 +237,12 @@ class ScratchpadDataset(GeneratedDataset):
 
     @staticmethod
     def _skip_ahead(spec: GenerationSpec, split: Split = Split.EVAL):
-        if split > Split.EVAL:
+        if split is not Split.EVAL:
             for _ in range(spec.eval_size):
                 torch.randint(spec.low, spec.high, (1,)).item()
                 torch.randint(spec.low, spec.high, (1,)).item()
 
-        if split > Split.TEST:
-            for _ in range(spec.test_size):
-                torch.randint(spec.low, spec.high, (1,)).item()
-                torch.randint(spec.low, spec.high, (1,)).item()
+            if split is not Split.TEST:
+                for _ in range(spec.test_size):
+                    torch.randint(spec.low, spec.high, (1,)).item()
+                    torch.randint(spec.low, spec.high, (1,)).item()

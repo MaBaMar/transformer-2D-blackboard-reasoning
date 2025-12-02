@@ -46,9 +46,8 @@ def generate_addition(digits: int, low: int, high: int, tokenizer: TokenizerType
     AdditionDataset(
         path=EVAL_PATH_BASE.format(f"addition_{digits}"),
         tokenizer=tokenizer,
-        train=False,
         regenerate=REGENERATE,
-        generation_spec=GenerationSpec(EVAL_SIZE, low, high),
+        generation_spec=GenerationSpec(low, high, EVAL_SIZE),
         operand=OPERATION,
     )
 
@@ -57,9 +56,8 @@ def generate_scratchpad(digits: int, low: int, high: int, tokenizer: TokenizerTy
     ScratchpadDataset(
         path=EVAL_PATH_BASE.format(f"scratchpad_{digits}"),
         tokenizer=tokenizer,
-        train=False,
         regenerate=REGENERATE,
-        generation_spec=GenerationSpec(EVAL_SIZE, low, high),
+        generation_spec=GenerationSpec(low, high, EVAL_SIZE),
         operand=OPERATION,
     )
 
@@ -109,7 +107,7 @@ def main(digits: int, tokenizer_name: str):
 
     generate_addition(digits, low, high, tokenizer=tokenizer)
     generate_scratchpad(digits, low, high, tokenizer=tokenizer)
-    generate_blackboard(digits, low, high)
+    #generate_blackboard(digits, low, high)
 
 
 if __name__ == "__main__":

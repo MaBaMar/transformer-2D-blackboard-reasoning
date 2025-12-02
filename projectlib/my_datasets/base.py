@@ -40,11 +40,11 @@ class Split(Enum):
 class GenerationSpec:
     """Class that specifies the parameters for the dataset generation."""
 
+    low: int                # Lower bound for random values
+    high: int               # Upper bound for random values
     eval_size: int          # Number of evaluation samples to generate
     test_size: int = 0      # Number of test samples to generate
     train_size: int = 0     # Number of training samples to generate
-    low: int                # Lower bound for random values
-    high: int               # Upper bound for random values
 
     def digits(eval_size: int, digits: int, test_size: int = 0, train_size: int = 0) -> "GenerationSpec":
         """
@@ -73,6 +73,7 @@ class GeneratedDataset(Dataset, ABC):
         super().__init__()
 
         # fix random seed for reproducibility, the train flag makes sure that train and eval sets get different random seeds
+        seed = seed if seed else RANDOM_SEED
         torch.manual_seed(seed)
         np.random.seed(seed)
 
