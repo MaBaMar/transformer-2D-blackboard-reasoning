@@ -7,7 +7,7 @@ from typing import TypeAlias
 
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, AutoTokenizer
 
-from projectlib.my_datasets.base import GenerationSpec
+from projectlib.my_datasets.base import GenerationSpec, Split
 from projectlib.my_datasets.additions import AdditionDataset
 from projectlib.my_datasets.scratchpads import ScratchpadDataset
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, BlackboardSpec
@@ -16,6 +16,7 @@ from projectlib.my_datasets._blackboard_operands import *
 TokenizerType: TypeAlias = PreTrainedTokenizer | PreTrainedTokenizerFast
 
 TRAIN_SIZE = 10000
+TEST_SIZE = 1000
 EVAL_SIZE = 1000
 
 OPERATION = "+"
@@ -73,11 +74,28 @@ def generate_blackboard(digits: int, low: int, high: int, additional_tokens: lis
 
     name = f"bb_{bb_spec.operation.get_name()}_{digits}"
 
+    spec = GenerationSpec(
+        low=low,
+        high=high,
+        eval_size=EVAL_SIZE,
+        test_size=TEST_SIZE,
+        train_size=TRAIN_SIZE,
+    )
+
     TokenizedBlackboardDataset(
         path=TRAIN_PATH_BASE.format(name),
         regenerate=REGENERATE,
-        train=True,
-        generation_spec=GenerationSpec(TRAIN_SIZE, low, high),
+        split=Split.TRAIN,
+        generation_spec=spec,
+        blackboard_spec=bb_spec,
+        additional_tokens=additional_tokens,
+    )
+
+    TokenizedBlackboardDataset(
+        path=TRAIN_PATH_BASE.format(name),
+        regenerate=REGENERATE,
+        split=Split.TEST,
+        generation_spec=spec,
         blackboard_spec=bb_spec,
         additional_tokens=additional_tokens,
     )
@@ -85,8 +103,8 @@ def generate_blackboard(digits: int, low: int, high: int, additional_tokens: lis
     TokenizedBlackboardDataset(
         path=EVAL_PATH_BASE.format(name),
         regenerate=REGENERATE,
-        train=False,
-        generation_spec=GenerationSpec(EVAL_SIZE, low, high),
+        split=Split.EVAL,
+        generation_spec=spec,
         blackboard_spec=bb_spec,
         additional_tokens=additional_tokens,
     )
@@ -107,7 +125,7 @@ def main(digits: int, tokenizer_name: str):
 
     generate_addition(digits, low, high, tokenizer=tokenizer)
     generate_scratchpad(digits, low, high, tokenizer=tokenizer)
-    #generate_blackboard(digits, low, high)
+    generate_blackboard(digits, low, high)
 
 
 if __name__ == "__main__":

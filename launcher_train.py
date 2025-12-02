@@ -9,6 +9,8 @@ NAME = "Training Edgar"
 MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
+EVAL_SIZE = 1024
+
 #
 #   Model parameters and corresponding sizes
 #
@@ -17,7 +19,7 @@ applicable_configs = {
     "seed": [i for i in range(1)],
     "digits": [3],
     "train_sizes": [64],
-    "eval_sizes": [16],
+    "test_sizes": [16],
     "batch_size": [1],      # Has to be 1 for now because of the sequence length problem!
     "model_spec": [
         # Model size: 7 Million
@@ -46,7 +48,7 @@ def main(args):
     command_list = []
     for digits in applicable_configs["digits"]:
         for train_size in applicable_configs["train_sizes"]:
-            for eval_size in applicable_configs["eval_sizes"]:
+            for test_size in applicable_configs["test_sizes"]:
                 for batch_size in applicable_configs["batch_size"]:
                     for model_spec in applicable_configs["model_spec"]:
                         for learning_rate in applicable_configs["learning_rate"]:
@@ -57,7 +59,8 @@ def main(args):
                                         "model_name": "Edgar",
                                         "digits": digits,
                                         "train_size": train_size,
-                                        "eval_size": eval_size,
+                                        "test_size": test_size,
+                                        "eval_size": EVAL_SIZE,
                                         "batch_size": batch_size,
                                         "model_dimension": model_spec["model_dimension"],
                                         "num_heads_encoder": model_spec["num_heads_encoder"],

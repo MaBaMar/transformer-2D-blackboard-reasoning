@@ -28,7 +28,7 @@ from torch.types import Number
 from tqdm import tqdm
 
 from projectlib.my_datasets._blackboard_operands import Addition, CarryOperation
-from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
+from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split
 
 @dataclass
 class BlackboardSpec:
@@ -43,6 +43,7 @@ class BlackboardSpec:
 # ------------------------------------------------------------
 # blackboard
 EVAL_PATH_BASE       = "datasets/bb_{}_eval.pt"
+TEST_PATH_BASE       = "datasets/bb_{}_test.pt"
 TRAIN_PATH_BASE      = "datasets/bb_{}_train.pt"
 BASE_GEN_SPEC        = GenerationSpec(10, 10, 20)
 BB_OPFRAME_HEIGHT    = 5    # this is the minimum number of rows required to fit the operation frame
@@ -247,13 +248,22 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         self,
         path: Optional[str] = None,
         seed: Optional[int] = None,
-        train: bool = True,
+        split: Split = Split.EVAL,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
         additional_tokens: list[str] | None = None
     ):
-        path = path or (TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name()) if train else EVAL_PATH_BASE.format(blackboard_spec.operation.get_name()))
+        base_path = None
+        match split:
+            case Split.EVAL:
+                base_path = EVAL_PATH_BASE.format(blackboard_spec.operation.get_name())
+            case Split.TEST:
+                base_path = TEST_PATH_BASE.format(blackboard_spec.operation.get_name())
+            case Split.TRAIN:
+                base_path = TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name())
+
+        path = path or base_path
 
         self.bb_spec: BlackboardSpec = blackboard_spec
         self.bb_2D_tokenizer: BBVocabTokenizer = BBVocabTokenizer(additional_tokens or [])
@@ -263,18 +273,20 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             path=path,
             regenerate=regenerate,
             generation_spec=generation_spec,
-            train=train,
+            split=split,
             seed=seed,
         )
 
 
-    def __generate__(self, spec: GenerationSpec):
+    def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL):
         inputs: list[dict[str, torch.Tensor]] = []
         labels: list[dict[str, torch.Tensor]] = []
 
+        # TODO use split to do something here ...
+
         print(40*"_")
         print("[blackboards.py] Starting data generation")
-        for _ in tqdm(range(spec.size)):
+        for _ in tqdm(range(split.size(spec))):
             # size is interpreted as the number of blackboard computation chains to generate
             a = torch.randint(spec.low, spec.high, (1,)).item()
             b = torch.randint(spec.low, spec.high, (1,)).item()
@@ -286,7 +298,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             inputs += input_states
             labels += output_states
 
-        print("[blackboards.py] Generated", spec.size, "blackboard chains encoded in", len(inputs), "data samples")
+        print("[blackboards.py] Generated", split.size(spec), "blackboard chains encoded in", len(inputs), "data samples")
         print(40*"_")
 
         return inputs, labels

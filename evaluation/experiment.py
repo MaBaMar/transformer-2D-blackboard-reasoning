@@ -32,7 +32,7 @@ def setup_model(model, device=-1):
     tok = AutoTokenizer.from_pretrained(model, padding_side="left")
     model = AutoModelForCausalLM.from_pretrained(
         model, 
-        torch_dtype="auto",
+        dtype="auto",
         device_map="auto" if torch.cuda.is_available() else None,
         quantization_config=quantization_config,
     )
@@ -51,19 +51,19 @@ def setup_model(model, device=-1):
 
 
 def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
-    low = 10**(digits - 1)
-    high = 10**(digits)
-    spec = GenerationSpec(size, low, high)
+    spec = GenerationSpec(
+        low=10**(digits - 1), 
+        high=10**(digits),
+        eval_size=size,
+    )
 
     if task == "basic":
         return AdditionDataset(
-            train=False,
             regenerate=True,
             generation_spec=spec,
         )
     elif task == "scratchpad":
         return ScratchpadDataset(
-            train=False,
             regenerate=True,
             generation_spec=spec,
         )
@@ -110,8 +110,10 @@ def check_prediction(prediction: str, label: str, task) -> int:
         result_true = int(label[0])
     elif task == "scratch_pad":
         result_true = extract_label_number(label[0])
+    elif task == "blackboard":
+        raise NotImplementedError("Implement blackboard!")
     else:
-        raise NotImplementedError()
+        raise TypeError("Unsupported task!")
 
     print(f"result_true: {result_true} and result_pred: {prediction}")
 
