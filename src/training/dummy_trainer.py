@@ -36,7 +36,6 @@ def minimal_check_edgar():
         n_encoder_blocks=2,
         n_decoder_blocks=2,
         pad_id=0,
-        eos_id=1000 # dummy
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=1e-3)

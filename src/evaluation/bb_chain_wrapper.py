@@ -3,6 +3,7 @@
 #
 # Generate a chain of blackboard reasoning steps. The wrapper function exposes a complete utility
 # interface for model prompting to the user, facilitating benchmarking, testing, and debugging.
+#
 # ------------------------------------------------------------
 
 from logging import getLogger
@@ -11,33 +12,36 @@ import numpy as np
 
 from projectlib.my_datasets._blackboard_operands import Subtraction
 from projectlib.my_datasets.blackboards import BasicOpBlackboardIterator, BlackboardSpec, BBVocabTokenizer, bb_prettyprint
-from projectlib.wrappertypes import BBChainGenerator, BBEndOfChainException
+from projectlib.wrappertypes import BBChainGenerator
 
 ASCII_NUMBERS = "0123456789"
 
 class BBChain:
     tokenizer: BBVocabTokenizer
-    steps: list[torch.Tensor]
     board_height: int
     board_width: int
 
-
-    def __init__(self, tokenizer: BBVocabTokenizer, steps: list[torch.Tensor], board_height: int, board_width: int):
+    def __init__(self, tokenizer: BBVocabTokenizer, board_height: int, board_width: int, steps: list[torch.Tensor] | None):
+        # public members
         self.tokenizer = tokenizer
-        self.steps = steps
         self.board_height = board_height
         self.board_width = board_width
 
-        self._negres: bool = False       # might need to change the result sign for subtraction
-        self._intres_cache: int | None = None
+        # logically private members
+        self._steps: list[torch.Tensor] = steps or []
+        self._negres: bool = False              # might need to change the result sign for subtraction
+        self._intres_cache: float = torch.nan   # would be int, but float supports NaN, which is useful for handling errors
         self._intres_cache_set: bool = False
+
+    def add_step(self, step: torch.Tensor):
+        self._steps.append(step)
 
     def set_negres(self, negres: bool):
         """Sets the negres flag to the given value. """
         self._negres = negres
 
     @property
-    def result(self) -> int | None:
+    def result(self) -> float:
         """
         Returns the result of the BBChain computation as an integer. The result is encoded in the last step of the chain.
         Returns None if the chain is incomplete or the result invalid.
@@ -48,18 +52,18 @@ class BBChain:
 
         self._intres_cache_set = True
 
-        if len(self.steps) == 0:
-            return None
+        if len(self._steps) == 0:
+            return torch.nan
 
         # detokenize and extract the result as an integer
-        final_state = self.tokenizer.decode(self.steps[-1].view(self.board_height, self.board_width))
+        final_state = self.tokenizer.decode(self._steps[-1].view(self.board_height, self.board_width))
 
         # look for last non-empty line, this line should hold the result
         for i in range(self.board_height-1, 3, -1): # result cannot appear in the first four lines
             if not self._is_empty_line(final_state[i]):
                 ans_str: str = "".join(filter(lambda x: x in ASCII_NUMBERS, final_state[i]))
                 if(len(ans_str) == 0):
-                    return None
+                    return torch.nan
 
                 if self._negres:
                     self._intres_cache = -int(ans_str)
@@ -68,7 +72,7 @@ class BBChain:
                 return self._intres_cache
 
         # result not found
-        return None
+        return torch.nan
 
     def _is_empty_line(self, line: list[str]) -> bool:
         for token in line:
@@ -78,7 +82,7 @@ class BBChain:
 
     def show_steps(self):
         print(f"BBChain(board_height={self.board_height}, board_width={self.board_width},\nsteps=[")
-        for step in self.steps:
+        for step in self._steps:
             bb_prettyprint(step.view(self.board_height, self.board_width), self.tokenizer)
         print("])")
 
@@ -105,7 +109,7 @@ class BBChainReasoner:
         self._tok = tokenizer or BBVocabTokenizer()
         self.logger = getLogger(__name__)
 
-    def compute_from_blackboard(self, blackboard: torch.Tensor) -> BBChain:
+    def compute_from_single_blackboard(self, blackboard: torch.Tensor) -> BBChain:
         """
         Computes a BBChain from a blackboard.
 
@@ -125,7 +129,7 @@ class BBChainReasoner:
         _pad_mask = blackboard == self._tok.pad_id
 
         # add a batch dimension of 1 and do inference
-        return self.compute_from_input((blackboard[None, ...], _pos_row[None, ...], _pow_col[None, ...], _pad_mask[None, ...]))
+        return self.compute_from_databatch((blackboard[None, ...], _pos_row[None, ...], _pow_col[None, ...], _pad_mask[None, ...]))[0]
 
     def compute_from_operands(self, operand1: int, operand2: int) -> BBChain:
 
@@ -172,35 +176,66 @@ class BBChainReasoner:
         # set BOS token
         blackboard[0, 0] = self._tok.bos_id
 
-        res: BBChain = self.compute_from_blackboard(blackboard)
+        res: BBChain = self.compute_from_single_blackboard(blackboard)
         res.set_negres(swapped)
 
         return res
 
-    def compute_from_input(self, x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> BBChain:
+    def compute_from_databatch(self, x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> list[BBChain]:
         """
-        Compute a blackboard chain from a given input.
+        Compute a blackboard chain for each of the given inputs.
 
         Args:
-            x: A tuple of tensors representing the input. Expected to be on the right device.
+            x: A tuple of tensors representing the input. Expected to be on the right device. Corresponds to the batched input of the blackboard dataset.
 
         Returns:
-            A BBChain object.
+            A list of BBChain objects.
         """
-        steps: list[torch.Tensor] = []
+        B, _ = x[0].shape
+        chains: list[BBChain] = [BBChain(self._tok, self.spec.height, self.spec.width, [x[0][i]]) for i in range(B)]
+        propagation_indices = torch.arange(B, dtype=torch.long, device=self.device)
 
-        for i in range(self._timeout):
-            steps.append(x[0])
-            self.logger.debug(f"Step {i}: attempting to generate next state")               # some logging. Probably helpful for later
-            try:    # try to generate the next state
-                bb_next = self.model.next_state(x)
-                self.logger.debug(f"generated state\n{bb_next}")
-                x = (bb_next, *x[1:])
-                self.logger.debug(f"Step {i}: next state successfully generated")
-            except BBEndOfChainException:   # next state is END OF BOARD CHAIN
-                # signal indicates that an End Of Chain state has been reached! we want to get here!
-                self.logger.debug(f"Step {i}: reached end of chain")
-                return BBChain(self._tok, steps, self.spec.height, self.spec.width)
+        for stidx in range(self._timeout):
+            self.logger.debug(f"Step {stidx}: generate next state")               # some logging. Probably helpful for later
+            bb_next = self.model.next_state(x) # dimension [B,L]
 
-        self.logger.warning("Reasoning chain generation timed-out after {} iterations. Please make sure your model is properly trained.".format(self._timeout))
-        return BBChain(self._tok, steps, self.spec.height, self.spec.width)
+            # only propagate the state if it is not an end of chain state
+            state_propagation_mask = ~(bb_next[:, 1] == self._tok.eos_id).flatten()
+
+            # keep track of the chains that require further propagation
+            propagation_indices = propagation_indices[state_propagation_mask]
+
+            x = (
+                bb_next[state_propagation_mask, :],
+                x[1][state_propagation_mask, :],
+                x[2][state_propagation_mask, :],
+                x[3][state_propagation_mask, :]
+            )
+
+            # add steps to chains
+            for i in range(x[0].shape[0]):
+                chains[propagation_indices[i]].add_step(bb_next[i].clone())
+
+            if not state_propagation_mask.any():
+                # all chains terminated
+                self.logger.debug(f"successfully completed all chains")
+                return chains
+
+        self.logger.warning(f"Reasoning chain generation timed-out after {self._timeout} iterations. {x[0].shape[0]} chains remain incomplete. They will appear truncated. Please make sure your model is properly trained.")
+        return chains
+
+
+# ------------------------------------------------------------
+# handy utility functions
+# ------------------------------------------------------------
+
+def chainlist_to_results(chainlist: list[BBChain]) -> torch.Tensor:
+    """Convert a list of BBChain objects with length B to a torch tensor of shape [B, 1] containing the extracted result for each chain.
+
+    Args:
+        chainlist: A list of BBChain objects.
+
+    Returns:
+        A list of dictionaries, where each dictionary represents a chain.
+    """
+    return torch.tensor([chain.result for chain in chainlist])[None, ...]
