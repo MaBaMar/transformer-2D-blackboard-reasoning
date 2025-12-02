@@ -23,7 +23,6 @@
 # NOTE: Entropy regularization is missing.
 # NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
-
 import math
 from typing import Tuple, Optional, final
 
@@ -284,13 +283,16 @@ class TwoDTPERoPEAttention(nn.Module):
             attn_mask = torch.zeros((B, 1, 1, L_k),device=device, dtype=torch.bool)
 
         if self.use_causal_mask:
-            # causal mask (lower-triangular)
-            causal = torch.triu(
-                torch.ones((L_q, L_k), device=device, dtype=torch.bool),
-                diagonal=1,
-            )  # [L_q,L_k]
-            causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,L_q,L_k]
-            attn_mask = attn_mask | causal 
+            # time indices (represents the time of token generation) for causal masking in a row-major fashion
+            q_time_raw = torch.arange(L_q, device=device).unsqueeze(0).expand(B, -1)
+            k_time_raw = torch.arange(L_k, device=device).unsqueeze(0).expand(B, -1)
+
+            q_time_sorted = torch.gather(q_time_raw, 1, q_sort_idx)[:, None, :, None]  # [B,1,L_q,1]
+            k_time_sorted = torch.gather(k_time_raw, 1, k_sort_idx)[:, None, None, :]   # [B,1,1,L_k]
+
+            causal_mask = q_time_sorted < k_time_sorted # [B,1,L_q,L_k] (true = mask it)
+
+            attn_mask = attn_mask | causal_mask
 
         attn_scores = attn_scores.masked_fill(attn_mask, float("-inf"))
         attn_weights = F.softmax(attn_scores, dim=-1)
@@ -312,7 +314,7 @@ class TwoDTPERoPEAttention(nn.Module):
         pos_col: torch.Tensor,
         context: Optional[torch.Tensor] = None,
         context_pos_row: Optional[torch.Tensor] = None,
-        context_pos_col: Optional[torch.Tensor] = None, 
+        context_pos_col: Optional[torch.Tensor] = None,
         key_padding_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
@@ -355,7 +357,7 @@ class TwoDTPERoPEAttention(nn.Module):
         k = k.view(kv_B, kv_L, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(kv_B, kv_L, self.num_heads, self.head_dim).transpose(1, 2)
 
-                   
+
         max_pos = int(max(kv_pos_row.max().item(), kv_pos_col.max().item(), pos_row.max().item(), pos_col.max().item(),)) + 1
         # build / reuse RoPE cache up to max position we see in either order
         cos, sin = self.rope_cache(
@@ -364,7 +366,6 @@ class TwoDTPERoPEAttention(nn.Module):
             dtype=q.dtype,)
 
 
-    
         # Apply RoPE for all four positions (4 instead of 2 cals because kv_pos_row does not have to be the same as pos_row)
         q_row = apply_rope(q, pos_row, cos, sin)
         q_col = apply_rope(q, pos_col, cos, sin)
@@ -486,7 +487,7 @@ class CausalTransformer2DTPE(nn.Module):
         self.tok_emb = nn.Embedding(vocab_size, d_model)
         self.drop = nn.Dropout(dropout)
 
-        self.layers = nn.ModuleList([TransformerBlock2DTPE(d_model=d_model,num_heads=num_heads, 
+        self.layers = nn.ModuleList([TransformerBlock2DTPE(d_model=d_model,num_heads=num_heads,
                                                              dropout=dropout,) for _ in range(num_layers) ])
 
         self.ln_f = nn.LayerNorm(d_model)

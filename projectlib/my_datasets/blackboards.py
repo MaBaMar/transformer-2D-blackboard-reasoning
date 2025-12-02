@@ -20,7 +20,7 @@
 
 import copy
 from dataclasses import dataclass
-from typing import Dict, Tuple, Optional, List
+from typing import Optional
 
 import numpy as np
 import torch
@@ -65,8 +65,8 @@ BB_OPLINE_SEG_TOKEN     = "="          # this token indicates a segment of the c
 #
 # ------------------------------------------------------------
 class BBVocabTokenizer:
-    def __init__(self, additional_tokens: List[str] = []):
-        self.token_to_id = {
+    def __init__(self, additional_tokens: list[str] | None = None):
+        self.token_to_id: dict[str, int] = {
             BB_BOS_TOKEN: 0,
             BB_EOS_TOKEN: 1,
             BB_EMPTY_TOKEN: 2,
@@ -75,12 +75,12 @@ class BBVocabTokenizer:
             **{operand_token: i + 14 for i, operand_token in enumerate(BB_OPTOKEN_LIST)},
             BB_FILL_NUM_TOKEN: len(BB_OPTOKEN_LIST) + 14,
             BB_OPLINE_SEG_TOKEN: len(BB_OPTOKEN_LIST) + 15,
-            **{token: len(BB_OPTOKEN_LIST) + 16 + i for i, token in enumerate(additional_tokens)},
+            **{token: len(BB_OPTOKEN_LIST) + 16 + i for i, token in enumerate(additional_tokens or [])},
         }
         print("Token to ID mapping:", self.token_to_id)
-        self.id_to_token = {v: k for k, v in self.token_to_id.items()}
+        self.id_to_token: dict[int, str] = {v: k for k, v in self.token_to_id.items()}
 
-    def encode(self, bb_grid: List[List[str]]) -> torch.Tensor:
+    def encode(self, bb_grid: list[list[str]]) -> torch.Tensor:
         """
         Encode a grid of strings into a tensor of token IDs.
 
@@ -103,7 +103,7 @@ class BBVocabTokenizer:
             raise ValueError(f"Unknown token '{e.args[0]}' in grid") from e
         return tokens
 
-    def decode(self, tokens: torch.Tensor) -> List[List[str]]:
+    def decode(self, tokens: torch.Tensor) -> list[list[str]]:
         """
         Decode a tensor of token IDs into a grid of strings.
 
@@ -174,21 +174,21 @@ class BasicOpBlackboardIterator:
         # some debugging checks
         assert len(operand1) == len(operand2), "Operation arrays must be of equal length. Use zero padding"
 
-        self.frame_width = len(operand1) + 2
-        self.frame_height = BB_OPFRAME_HEIGHT
+        self.frame_width: int = len(operand1) + 2
+        self.frame_height: int = BB_OPFRAME_HEIGHT
 
-        self.step = 0
-        self.last_carry = 0
-        self.operand1 = operand1
-        self.operand2 = operand2
-        self.oplen = len(operand1)
-        self.operation = operation
+        self.step: int = 0
+        self.last_carry: int = 0
+        self.operand1: np.ndarray = operand1
+        self.operand2: np.ndarray = operand2
+        self.oplen: int = len(operand1)
+        self.operation: CarryOperation = operation
 
         # generate the starting operation frame, we will gradually fill in digits while generating the states
         self._reset_operation_frame()
 
         # this is the EOS state
-        self.eos_frame = [[eos_filler for _ in range(self.frame_width)] for _ in range(self.frame_height)]
+        self.eos_frame: list[list[str]] = [[eos_filler for _ in range(self.frame_width)] for _ in range(self.frame_height)]
         self.eos_frame[0][0] = BB_BOS_TOKEN
         self.eos_frame[0][1] = BB_EOS_TOKEN
 
@@ -241,7 +241,6 @@ class BasicOpBlackboardIterator:
 # IMPORTANT: Unlike the other GeneratedDataset classes, this class performs tokenization BEFORE saving the dataset.
 #            This is for efficiency as we use a custom tokenizer (not the HuggingFace fast tokenizer implemented in rust)
 # ------------------------------------------------------------
-
 class TokenizedBlackboardDataset(GeneratedDataset):
 
     def __init__(
@@ -252,12 +251,12 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
-        additional_tokens: List[str] | None = None
+        additional_tokens: list[str] | None = None
     ):
         path = path or (TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name()) if train else EVAL_PATH_BASE.format(blackboard_spec.operation.get_name()))
 
-        self.bb_spec = blackboard_spec
-        self.bb_2D_tokenizer = BBVocabTokenizer(additional_tokens or [])
+        self.bb_spec: BlackboardSpec = blackboard_spec
+        self.bb_2D_tokenizer: BBVocabTokenizer = BBVocabTokenizer(additional_tokens or [])
 
         # generate data
         super().__init__(
@@ -270,8 +269,8 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 
 
     def __generate__(self, spec: GenerationSpec):
-        inputs = []
-        labels = []
+        inputs: list[dict[str, torch.Tensor]] = []
+        labels: list[dict[str, torch.Tensor]] = []
 
         print(40*"_")
         print("[blackboards.py] Starting data generation")
@@ -300,10 +299,10 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         return self.data[idx], self.labels[idx]
 
     # ---------------- helpers (logically private methods) ----------------
-    def _generate_blackboard_pairs(self, a: Number, b: Number) -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
+    def _generate_blackboard_pairs(self, a: Number, b: Number) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, torch.Tensor]]]:
 
         # perform hand addition or subtraction and store the digit steps in lists
-        max_input_length = max(np.ceil(np.log10(a)).astype(np.int32), np.ceil(np.log10(b)).astype(np.int32))
+        max_input_length: int = max(np.floor(np.log10(a)).astype(np.int32), np.floor(np.log10(b)).astype(np.int32)) + 1
 
         digits_a = np.empty(max_input_length, dtype=int)
         digits_b = np.empty(max_input_length, dtype=int)
@@ -332,7 +331,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
                 p_y = np.random.randint(0, r_max_y)
 
         # generate solution sequence
-        bb_chain = []
+        bb_chain: list[torch.Tensor] = []
 
         for i, opframe in enumerate(opframe_generator):
 
@@ -353,14 +352,14 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         # Note: we need copies for the label to avoid aliasing
         return self._pack_to_input_format(bb_chain[:-1]), self._pack_to_input_format(bb_chain[1:], copy=True)
 
-    def _pack_to_input_format(self, bbs: List[torch.Tensor], copy: bool = False) -> List[Dict[str, torch.Tensor]]:
+    def _pack_to_input_format(self, bbs: list[torch.Tensor], copy: bool = False) -> list[dict[str, torch.Tensor]]:
 
         H, W = bbs[0].shape
 
         return [{
             "tokens": bb.clone() if copy else bb,
-            "pos_row": torch.arange(H*W),
-            "pos_col": torch.arange(H*W).view(H, W).T.flatten()
+            "pos_row": torch.arange(H*W, dtype=torch.long),
+            "pos_col": torch.arange(H*W, dtype=torch.long).view(H, W).T.flatten()
         } for bb in bbs]
 
 
@@ -370,16 +369,17 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 #
 # They are not in the utils.py file to avoid circular imports.
 # ------------------------------------------------------------
-def bb_prettyprint(board: torch.Tensor):
+def bb_prettyprint(board: torch.Tensor, tokenizer: Optional[BBVocabTokenizer] = None):
     """
     Pretty-print a tokenized blackboard
 
     Args:
         board (torch.Tensor): The board to print.
     """
-    tok = BBVocabTokenizer()
+    tok = tokenizer or BBVocabTokenizer()
 
     decoded_board = tok.decode(board)
+    print((board.shape[1]+2) * "-")
     for i in range(len(decoded_board)):
         line = '|'
         for j in range(len(decoded_board[i])):
@@ -397,7 +397,7 @@ def bb_prettyprint(board: torch.Tensor):
     print((board.shape[1]+2) * "-")
 
 
-def bb_datasample_prettyprint(sample: Dict[str, torch.Tensor]):
+def bb_datasample_prettyprint(sample: dict[str, torch.Tensor]):
     """
     Pretty-prints a dataset sample
 

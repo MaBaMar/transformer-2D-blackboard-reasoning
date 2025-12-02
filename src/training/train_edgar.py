@@ -2,6 +2,8 @@
 import argparse
 import os
 import torch
+import logging
+
 import wandb
 import numpy as np
 
@@ -10,7 +12,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.models.edgar import Edgar
-from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, BlackboardSpec, Addition, bb_datasample_prettyprint
 from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
 
 
@@ -126,6 +128,7 @@ def train(
         n_encoder_blocks=n_encoder_blocks,
         n_decoder_blocks=n_decoder_blocks,
         pad_id=pad_id,
+        eos_id=bb_dataset_train.bb_2D_tokenizer.eos_id,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
@@ -145,11 +148,11 @@ def train(
         for step, (x_batch, y_batch) in enumerate(train_loader):
             optimizer.zero_grad()
 
-            logits, loss = model(x_batch, y_batch)
+                logits, loss = model(x_batch, y_batch)
 
-            # Backward pass
-            loss.backward()
-            optimizer.step()
+                # Backward pass
+                loss.backward()
+                optimizer.step()
 
             wandb.log({
                 "epoch": epoch,
@@ -232,8 +235,17 @@ def main(args):
     )
 
 
+        torch.save(model.state_dict(), "model.pth")
+    else:
+        model.load_state_dict(torch.load("model.pth"))
+
+    print("Model loaded")
+
 
 if __name__ == "__main__":
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str)
     parser.add_argument("--model_name", type=str)
