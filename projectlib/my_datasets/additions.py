@@ -45,7 +45,7 @@ class AdditionDataset(GeneratedDataset):
         path: Optional[str] = None,
         tokenizer: Optional[TokenizerType] = None,
         seed: Optional[int] = None,
-        regenerate: bool = False,
+        regenerate: bool = True,
         operand: Operation = "+",
         spaces: bool = False,
     ):

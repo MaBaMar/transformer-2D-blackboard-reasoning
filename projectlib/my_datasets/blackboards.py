@@ -249,7 +249,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         path: Optional[str] = None,
         seed: Optional[int] = None,
         split: Split = Split.EVAL,
-        regenerate: bool = False,
+        regenerate: bool = True,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
         additional_tokens: list[str] | None = None

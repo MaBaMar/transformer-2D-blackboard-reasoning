@@ -84,7 +84,7 @@ class ScratchpadDataset(GeneratedDataset):
         tokenizer: Optional[TokenizerType] = None,
         split: Split = Split.EVAL,
         seed: Optional[int] = None,
-        regenerate: bool = False,
+        regenerate: bool = True,
         operand: Operation = "+",
     ):
         self.operand = operand

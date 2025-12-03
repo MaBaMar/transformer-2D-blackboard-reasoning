@@ -46,6 +46,7 @@ class GenerationSpec:
     test_size: int = 0      # Number of test samples to generate
     train_size: int = 0     # Number of training samples to generate
 
+    @staticmethod
     def digits(eval_size: int, digits: int, test_size: int = 0, train_size: int = 0) -> "GenerationSpec":
         """
         Alternate constructor that sets low/high based on number of digits.
@@ -64,7 +65,7 @@ class GeneratedDataset(Dataset, ABC):
         self,
         path: str,
         tokenizer: Optional[TokenizerType] = None,
-        regenerate: bool = False,
+        regenerate: bool = True,
         generation_spec: Optional[GenerationSpec] = None,
         max_length: int = TOKENIZER_MAX_LENGTH,
         split: Split = Split.EVAL,
