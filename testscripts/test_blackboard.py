@@ -22,8 +22,7 @@ from projectlib.my_datasets.blackboards import (
     TokenizedBlackboardDataset,
     bb_prettyprint,
 )
-
-from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
+from projectlib.my_datasets.collators import make_collator_with_args, collate_bb_state_int
 
 # --- 1. Fixtures for Setup and Shared Data ---
 
@@ -136,12 +135,8 @@ def inspect(split: Split, operation: CarryOperation):
     print_dataset(dataset, split == Split.EVAL)
 
 if __name__ == "__main__":
-    pytest.main()
-
     run_tmp_path = "tmp_bb_subtraction.pl"
     # can add some visual testing of blackboard states
-
-
     print("\n\n-----ADDITION_CHAIN-----")
     inspect(Split.TRAIN, Addition())
 
@@ -154,5 +149,20 @@ if __name__ == "__main__":
     print("\n\n-----SUBTRACTION_EVAL-----")
     inspect(Split.EVAL, Subtraction())
 
+    dataset = TokenizedBlackboardDataset(
+        seed=0,
+        path=os.path.join(run_tmp_path),
+        regenerate=True, # Force regeneration for reliable testing
+        generation_spec=GenerationSpec(low=10, high=99, eval_size=10, train_size=1, test_size=1),
+        blackboard_spec=BlackboardSpec(10, 10, True, Addition()),
+        split=Split.EVAL
+    )
+
+    dl = DataLoader(dataset, batch_size=10, collate_fn=make_collator_with_args(collate_bb_state_int, dataset.bb_2D_tokenizer.pad_id, torch.device("cpu")))
+    for batch in dl:
+        print(batch)
+        break
+
     # cleanup
     os.remove(run_tmp_path)
+    pytest.main()
