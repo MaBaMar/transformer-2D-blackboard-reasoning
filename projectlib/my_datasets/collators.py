@@ -30,7 +30,7 @@ def make_collator_with_args(
     Converts a function with additional arguments into a valid collator function.
 
     Args:
-        func: The function to wrap (e.g., collate_blackboards).
+        func: The function to wrap (e.g., bb_collate_state_state).
                 It must accept a list as its first argument.
         *args: Positional arguments to pass to func after the batch.
         **kwargs: Keyword arguments to pass to func.
