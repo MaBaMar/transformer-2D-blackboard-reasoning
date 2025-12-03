@@ -60,13 +60,14 @@ class GenerationSpec:
         )
 
 
+
 class GeneratedDataset(Dataset, ABC):
     def __init__(
         self,
         path: str,
+        generation_spec: GenerationSpec,
         tokenizer: Optional[TokenizerType] = None,
         regenerate: bool = True,
-        generation_spec: Optional[GenerationSpec] = None,
         max_length: int = TOKENIZER_MAX_LENGTH,
         split: Split = Split.EVAL,
         seed: Optional[int] = None,
@@ -89,6 +90,15 @@ class GeneratedDataset(Dataset, ABC):
             self.data = saved["data"]
             self.labels = saved["labels"]
         elif generation_spec:
+            numbers = GeneratedDataset._sample_numbers(generation_spec)
+
+            e_s = generation_spec.eval_size
+            et_s = e_s + generation_spec.test_size
+
+            self.eval_nums = numbers[: e_s]
+            self.test_nums = numbers[e_s : et_s]
+            self.train_nums = numbers[et_s :]
+
             data, labels = self.__generate__(generation_spec, split)
             torch.save({"data": data, "labels": labels}, path)
             self.data = data
@@ -131,3 +141,18 @@ class GeneratedDataset(Dataset, ABC):
             }
 
         return {"input": input, "label": label}
+    
+
+    @staticmethod
+    def _sample_numbers(spec: GenerationSpec) -> list[tuple[int, int]]:
+        size = spec.eval_size + spec.test_size + spec.train_size
+
+        numbers = []
+
+        for _ in range(size):
+            a = torch.randint(spec.low, spec.high, (1,)).item()
+            b = torch.randint(spec.low, spec.high, (1,)).item()
+
+            numbers.append((a, b))
+
+        return numbers

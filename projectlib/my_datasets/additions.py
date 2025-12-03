@@ -71,10 +71,7 @@ class AdditionDataset(GeneratedDataset):
         inputs = []
         labels = []
 
-        for _ in range(spec.eval_size):
-            a = torch.randint(spec.low, spec.high, (1,)).item()
-            b = torch.randint(spec.low, spec.high, (1,)).item()
-
+        for (a, b) in self.eval_nums:
             if(self.operand == "-") and a < b:
                 a, b = b, a
 

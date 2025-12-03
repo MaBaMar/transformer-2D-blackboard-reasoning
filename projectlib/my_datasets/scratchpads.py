@@ -113,37 +113,22 @@ class ScratchpadDataset(GeneratedDataset):
     def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL):
         """Generate the scratchpad dataset"""
 
-        ScratchpadDataset._skip_ahead(spec, split)
-                
         inputs = []
         labels = []
 
         numbers = []
-        for _ in range(split.size(spec)):
-            a = torch.randint(spec.low, spec.high, (1,)).item()
-            b = torch.randint(spec.low, spec.high, (1,)).item()
+        match split:
+            case Split.EVAL: numbers = self.eval_nums
+            case Split.TEST: numbers = self.test_nums
+            case Split.TRAIN: numbers = self.train_nums
 
+        for a, b in numbers:
             if(self.operand == "-") and a < b:
                 a, b = b, a
 
-            numbers.append((a, b))
-
-        ScratchpadDataset._skip_ahead(spec, split)
-
-        for a, b in numbers:
-            c = torch.randint(spec.low, spec.high, (1,)).item()
-            d = torch.randint(spec.low, spec.high, (1,)).item()
-
-            if(self.operand == "-") and c < d:
-                c, d = d, c
-
-            example_scratchpad = self._generate_scratchpad(c, d)
             target_scratchpad = self._generate_scratchpad(a, b)
 
-            inputs.append((
-                f"Example:\n{example_scratchpad}\n"
-                f"Compute: {num_to_str(a)} {self.operand} {num_to_str(b)}"
-            ))
+            inputs.append(f"{num_to_str(a)} {self.operand} {num_to_str(b)}")
             labels.append(target_scratchpad)
 
         return inputs, labels
@@ -233,16 +218,3 @@ class ScratchpadDataset(GeneratedDataset):
         line = f"{operation}, {digits_to_str(result)} C: {carry} {comment}\n"
 
         return line, carry
-    
-
-    @staticmethod
-    def _skip_ahead(spec: GenerationSpec, split: Split = Split.EVAL):
-        if split is not Split.EVAL:
-            for _ in range(spec.eval_size):
-                torch.randint(spec.low, spec.high, (1,)).item()
-                torch.randint(spec.low, spec.high, (1,)).item()
-
-            if split is not Split.TEST:
-                for _ in range(spec.test_size):
-                    torch.randint(spec.low, spec.high, (1,)).item()
-                    torch.randint(spec.low, spec.high, (1,)).item()
