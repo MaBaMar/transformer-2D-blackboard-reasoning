@@ -33,6 +33,19 @@ class CarryOperation(ABC):
         """
         pass
 
+    @abstractmethod
+    def on_ints(self, op1: int, op2: int) -> int:
+        """Perform the operation on two integers.
+
+        Args:
+            op1 (int): The first operand.
+            op2 (int): The second operand.
+
+        Returns:
+            int: The result of the operation.
+        """
+        pass
+
 class Addition(CarryOperation):
 
     def step(self, op1: int, op2: int, last_carry: int) -> tuple[int, int]:
@@ -46,6 +59,9 @@ class Addition(CarryOperation):
 
     def finalize_carry(self, carry: int) -> str:
         return str(carry)
+
+    def on_ints(self, op1: int, op2: int) -> int:
+        return op1 + op2
 
 class Subtraction(CarryOperation):
 
@@ -66,3 +82,6 @@ class Subtraction(CarryOperation):
         if carry:
             raise ValueError("Invalid carry. Please ensure that op1 >= op2")
         return "0"
+
+    def on_ints(self, op1: int, op2: int) -> int:
+        return op1 - op2
