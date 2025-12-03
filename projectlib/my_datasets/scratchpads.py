@@ -35,28 +35,7 @@ class ScratchpadDataset(GeneratedDataset):
         The entries are of the following form
 
         {
-            'input': 'Example:
-
-                      Input: 8 9 + 9 9
-
-                      Target:
-
-                      &lt;scratch&gt;
-
-                      8 9 + 9 9 , C: 0
-
-                      8 + 9 , 8 C: 1 # added 9 + 9 = 8 carry 1
-
-                      , 8 8 C: 1 # added 8 + 9 + 1 = 8 carry 1
-
-                      1 8 8
-
-                      &lt;/scratch&gt;
-
-                      Result: 1 8 8
-
-
-                      Compute: 1 7 + 8 3',
+            'input': '1 7 + 8 3',
 
             'label': 'Input: 1 7 + 8 3
 
