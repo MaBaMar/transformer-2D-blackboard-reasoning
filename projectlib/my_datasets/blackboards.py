@@ -21,6 +21,7 @@
 import copy
 from dataclasses import dataclass
 from typing import Optional
+from logging import getLogger, Logger
 
 import numpy as np
 import torch
@@ -77,7 +78,6 @@ class BBVocabTokenizer:
             BB_OPLINE_SEG_TOKEN: len(BB_OPTOKEN_LIST) + 15,
             **{token: len(BB_OPTOKEN_LIST) + 16 + i for i, token in enumerate(additional_tokens or [])},
         }
-        print("Token to ID mapping:", self.token_to_id)
         self.id_to_token: dict[int, str] = {v: k for k, v in self.token_to_id.items()}
 
     def encode(self, bb_grid: list[list[str]]) -> torch.Tensor:
@@ -267,6 +267,9 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         self.bb_spec: BlackboardSpec = blackboard_spec
         self.bb_2D_tokenizer: BBVocabTokenizer = BBVocabTokenizer(additional_tokens or [])
 
+        # add a logger for some helpful logging that can be disabled
+        self._datalogger: Logger = getLogger(__name__)
+
         # generate data
         super().__init__(
             path=path,
@@ -276,33 +279,31 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             seed=seed,
         )
 
-
     def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, torch.Tensor] | int]]:
 
         inputs: list[dict[str, torch.Tensor]] = []
         labels: list[dict[str, torch.Tensor] | int] = []
 
+        input_operands: list[tuple[int, int]] = []
+        match split:
+            case Split.EVAL: input_operands = self.eval_nums
+            case Split.TRAIN: input_operands = self.train_nums
+            case Split.TEST: input_operands = self.test_nums
 
-        # TODO use split to do something here ...
-        self._skip_ahead(spec, split)
-
-        print(40*"_")
-        print("[blackboards.py] Starting data generation")
-        for _ in tqdm(range(split.size(spec))):
+        for a, b in tqdm(input_operands, desc="Generating data"):
             # size is interpreted as the number of blackboard computation chains to generate
-            a: int = torch.randint(spec.low, spec.high, (1,)).item()
-            b: int = torch.randint(spec.low, spec.high, (1,)).item()
-
             if(self.bb_spec.operation.get_name() == 'subtraction') and a < b:
                 a, b = b, a
-
 
             input_states, output_states = self._generate_blackboard_pairs(a, b, split != Split.EVAL)
             inputs += input_states
             labels += output_states
 
-        print("[blackboards.py] Generated", split.size(spec), "blackboard chains encoded in", len(inputs), "data samples")
-        print(40*"_")
+        # helpful logging to inform the user about what type of data they generated
+        if(split == Split.EVAL):
+            self._datalogger.info(f"Generated {len(inputs)} blackboard input state - integer pairs")
+        else:
+            self._datalogger.info(f"Generated {split.size(spec)} blackboard chains encoded in {len(inputs)} data samples")
 
         return inputs, labels
 
@@ -355,18 +356,6 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             "pos_row": torch.arange(H*W, dtype=torch.long),
             "pos_col": torch.arange(H*W, dtype=torch.long).view(H, W).T.flatten()
         } for bb in bbs]
-
-    @staticmethod
-    def _skip_ahead(spec: GenerationSpec, split: Split = Split.EVAL):
-        if split is not Split.EVAL:
-            for _ in range(spec.eval_size):
-                torch.randint(spec.low, spec.high, (1,)).item()
-                torch.randint(spec.low, spec.high, (1,)).item()
-
-            if split is not Split.TEST:
-                for _ in range(spec.test_size):
-                    torch.randint(spec.low, spec.high, (1,)).item()
-                    torch.randint(spec.low, spec.high, (1,)).item()
 
 
 
