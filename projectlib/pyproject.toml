@@ -5,3 +5,10 @@ version = "0.1.0"
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages]
+# List every top-level package folder you want to include:
+find = { include = ["transformer", "my_datasets"] }
+
+[tool.basedpyright]
+reportExplicitAny = false

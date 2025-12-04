@@ -1,11 +1,11 @@
 import torch
 
-from transformers import AutoTokenizer
-from typing import override
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from typing import override, TypeAlias, Union, Optional
 
 from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
 from projectlib.my_datasets._operands import OPERATION, Operation
-from projectlib.my_datasets.utils import num_to_str, get_digits, get_number, digits_to_str
+from projectlib.my_datasets.utils import num_to_str, get_digits, digits_to_str
 
 
 
@@ -15,11 +15,11 @@ TRAIN_PATH = "datasets/scratchpads_train.pt"
 
 BASE_SPEC = GenerationSpec(10, 10, 100)
 
-
+TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
 class ScratchpadDataset(GeneratedDataset):
     """
-    Dataset containing prompts that induce a chain of thought approach that is based on scratchpads. 
+    Dataset containing prompts that induce a chain of thought approach that is based on scratchpads.
 
     Parameters:
         path (str, optional): Path to store/load the dataset. Defaults to train or eval path.
@@ -29,7 +29,7 @@ class ScratchpadDataset(GeneratedDataset):
         generation_spec (GenerationSpec, optional): Controls size and numeric range. Defaults to BASE_SPEC.
         operand (Operation, optional): Arithmetic operation ("+" or "-"). Defaults to "+".
 
-    Returns: 
+    Returns:
         A `ScratchpadDataset` object containing lists of inputs and labels.
 
     Example:
@@ -39,7 +39,7 @@ class ScratchpadDataset(GeneratedDataset):
             'input': 'Example:
 
                       Input: 8 9 + 9 9
-            
+
                       Target:
 
                       &lt;scratch&gt;
@@ -56,8 +56,8 @@ class ScratchpadDataset(GeneratedDataset):
 
                       Result: 1 8 8
 
-                      
-                      Compute: 1 7 + 8 3', 
+
+                      Compute: 1 7 + 8 3',
 
             'label': 'Input: 1 7 + 8 3
 
@@ -80,19 +80,20 @@ class ScratchpadDataset(GeneratedDataset):
     """
     def __init__(
         self,
-        path: str = None,
-        tokenizer: AutoTokenizer = None,
+        path: Optional[str] = None,
+        tokenizer: Optional[TokenizerType] = None,
         train: bool = True,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_SPEC,
         operand: Operation = "+",
     ):
         self.operand = operand
-        
+
         path = path if path else (TRAIN_PATH if train else EVAL_PATH)
         super().__init__(
             path=path,
             tokenizer=tokenizer,
+            train=train,
             regenerate=regenerate,
             generation_spec=generation_spec,
         )
@@ -100,7 +101,7 @@ class ScratchpadDataset(GeneratedDataset):
     @override
     def __generate__(self, spec: GenerationSpec):
         """Generate the scratchpad dataset"""
-        
+
         inputs = []
         labels = []
 
@@ -131,7 +132,7 @@ class ScratchpadDataset(GeneratedDataset):
             labels.append(target_scratchpad)
 
         return inputs, labels
-    
+
     def _generate_scratchpad(self, a: int, b: int) -> str:
         """Generate the scratchpad for a and b"""
 
@@ -149,9 +150,9 @@ class ScratchpadDataset(GeneratedDataset):
 
         for i in range(1, n + 1):
             line, prev_carry = self._generate_line(
-                prev_carry=prev_carry, 
-                result=result, 
-                d_a=d_a[:n - i + 1], 
+                prev_carry=prev_carry,
+                result=result,
+                d_a=d_a[:n - i + 1],
                 d_b=d_b[:n - i + 1],
             )
             scratchpad += line
@@ -166,12 +167,12 @@ class ScratchpadDataset(GeneratedDataset):
         return (
             f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)}\n"
             f"Target:\n<scratch>\n{scratchpad}</scratch>\n"
-            f"Result: {num_to_str(OPERATION[self.operand](a, b))}\n"
+            f"Result: {num_to_str(int(OPERATION[self.operand](a, b)))}\n"
         )
-    
+
     def _generate_line(self, prev_carry: int, result: list[int], d_a: list[int], d_b: list[int]) -> tuple[str, int]:
         """Generate the next line of the scratchpad"""
-        
+
         left_a = digits_to_str(d_a[:-1])
         left_b = digits_to_str(d_b[:-1])
         curr_a = d_a[-1]
@@ -195,23 +196,23 @@ class ScratchpadDataset(GeneratedDataset):
 
         # Generate the operation
         operation = f"{left_a} {self.operand} {left_b} " if left_a and left_b else ""
-        
+
         # Generate the comment
         if self.operand == "+":
             if prev_carry:
                 comment = f"# added {curr_a} + {curr_b} + 1 = {curr_digit} carry {carry}"
-            else:   
+            else:
                 comment = f"# added {curr_a} + {curr_b} = {curr_digit} carry {carry}"
         elif self.operand == "-":
             borrowed_a = (10 + curr_a) if borrow else curr_a
             if prev_carry:
                 comment = f"# subtracted {curr_b} + {prev_carry} + {curr_digit} = {borrowed_a} carry {carry}"
-            else:   
+            else:
                 comment = f"# subtracted {curr_b} + {curr_digit} = {borrowed_a} carry {carry}"
         else:
             raise NotImplementedError()
 
         # Generate the line
         line = f"{operation}, {digits_to_str(result)} C: {carry} {comment}\n"
-            
+
         return line, carry
