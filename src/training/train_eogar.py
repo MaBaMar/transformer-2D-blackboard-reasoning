@@ -1,4 +1,4 @@
-# minimal training script for Edgar model
+# minimal training script for EOgar model
 import argparse
 import os
 import torch
@@ -11,7 +11,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.models.edgar import Edgar
+from src.models.eogar import EOgar
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 
@@ -50,9 +50,7 @@ def train(
         batch_size: int,
         model_dimension: int,
         num_heads_encoder: int,
-        num_heads_decoder: int,
         n_encoder_blocks: int,
-        n_decoder_blocks: int,
         learning_rate: float,
         epochs: int,
         seed: int,
@@ -72,9 +70,7 @@ def train(
             "batch_size": batch_size,
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
-            "num_heads_decoder": num_heads_decoder,
             "n_encoder_blocks": n_encoder_blocks,
-            "n_decoder_blocks": n_decoder_blocks,
             "learning_rate": learning_rate,
             "epochs": epochs,
             "seed": seed,
@@ -127,13 +123,11 @@ def train(
 
     print("Data loaded.")
 
-    model = Edgar(
+    model = EOgar(
         vocab_size=vocab_size,
         d_model=model_dimension,
         num_heads_encoder=num_heads_encoder,
-        num_heads_decoder=num_heads_decoder,
         n_encoder_blocks=n_encoder_blocks,
-        n_decoder_blocks=n_decoder_blocks,
         pad_id=pad_id,
         eos_id=bb_dataset_train.bb_2D_tokenizer.eos_id,
     ).to(device)
@@ -212,9 +206,7 @@ def train(
             "vocab_size": vocab_size,
             "d_model": model_dimension,
             "num_heads_encoder": 4,
-            "num_heads_decoder": 4,
             "n_encoder_blocks": 2,
-            "n_decoder_blocks": 2,
         }
     }, save_path)
 
@@ -233,9 +225,7 @@ def main(args):
         batch_size=args.batch_size,
         model_dimension=args.model_dimension,
         num_heads_encoder=args.num_heads_encoder,
-        num_heads_decoder=args.num_heads_decoder,
         n_encoder_blocks=args.n_encoder_blocks,
-        n_decoder_blocks=args.n_decoder_blocks,
         learning_rate=args.learning_rate,
         epochs=args.epochs,
         seed=args.seed,
@@ -258,9 +248,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--num_heads_encoder", type=int)
-    parser.add_argument("--num_heads_decoder", type=int)
     parser.add_argument("--n_encoder_blocks", type=int)
-    parser.add_argument("--n_decoder_blocks", type=int)
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--seed", type=int, default=0)

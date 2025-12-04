@@ -1,6 +1,6 @@
-# minimal training script for Edgar model
+# minimal training script for EOgar model
 import torch
-from src.models.edgar import Edgar
+from src.models.eogar import EOgar
 
 from torch.optim import AdamW
 
@@ -22,19 +22,17 @@ def get_dummy_batch(batch_size, seq_len, vocab_size, device):
 
     return (tokens, pos_row, pos_col, mask)
 
-def minimal_check_edgar():
+def minimal_check_eogar():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     B, L_src, L_tgt = 2, 16, 16
     vocab_size = 100
     d_model = 64
 
-    model = Edgar(
+    model = EOgar(
         vocab_size=vocab_size,
         d_model=d_model,
         num_heads_encoder=4,
-        num_heads_decoder=4,
         n_encoder_blocks=2,
-        n_decoder_blocks=2,
         pad_id=0,
     ).to(device)
 
@@ -62,4 +60,4 @@ def minimal_check_edgar():
         print(f"Step {step+1}, Loss: {loss.item():.4f}, Logit Shape: {logits.shape}, IDs Shape: {generated_ids.shape}")
 
 if __name__ == "__main__":
-    minimal_check_edgar()
+    minimal_check_eogar()

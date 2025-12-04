@@ -1,11 +1,11 @@
 import argparse
 
-from src.training import train_edgar as experiment
+from src.training import train_eogar as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Training Edgar"
+NAME = "Training EOgar"
 MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
@@ -22,8 +22,11 @@ applicable_configs = {
     "test_sizes": [16],
     "batch_size": [1],      # Has to be 1 for now because of the sequence length problem!
     "model_spec": [
+        # Model size: small
+        { "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+
         # Model size: 7 Million
-        { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 64, "n_decoder_blocks": 64 },
+        # { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 64, "n_decoder_blocks": 64 },
 
         # Model size: 15 Million
         # { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 128, "n_decoder_blocks": 128 },
@@ -56,7 +59,7 @@ def main(args):
                                 for seed in applicable_configs["seed"]:
                                     flags = {
                                         "name": NAME,
-                                        "model_name": "Edgar",
+                                        "model_name": "EOgar",
                                         "digits": digits,
                                         "train_size": train_size,
                                         "test_size": test_size,
@@ -64,9 +67,7 @@ def main(args):
                                         "batch_size": batch_size,
                                         "model_dimension": model_spec["model_dimension"],
                                         "num_heads_encoder": model_spec["num_heads_encoder"],
-                                        "num_heads_decoder": model_spec["num_heads_decoder"],
                                         "n_encoder_blocks": model_spec["n_encoder_blocks"],
-                                        "n_decoder_blocks": model_spec["n_decoder_blocks"],
                                         "learning_rate": learning_rate,
                                         "epochs": epochs,
                                         "seed": seed,
