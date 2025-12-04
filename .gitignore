@@ -220,6 +220,3 @@ checkpoints/
 
 # Ignore datacache for testscripts
 testscripts/.datacache/*
-
-# Ignore the models
-models/
