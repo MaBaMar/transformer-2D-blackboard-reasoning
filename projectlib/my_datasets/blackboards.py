@@ -246,6 +246,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
     def __init__(
         self,
         path: Optional[str] = None,
+        seed: Optional[int] = None,
         train: bool = True,
         regenerate: bool = False,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
@@ -263,6 +264,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             regenerate=regenerate,
             generation_spec=generation_spec,
             train=train,
+            seed=seed,
         )
 
 

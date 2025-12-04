@@ -23,6 +23,12 @@ class GenerationSpec:
     low: int  # Lower bound for random values
     high: int  # Upper bound for random values
 
+    def digits(size: int, digits: int) -> "GenerationSpec":
+        """
+        Alternate constructor that sets low/high based on number of digits.
+        """
+        return GenerationSpec(size, low=1, high=10**digits)
+
 
 class GeneratedDataset(Dataset, ABC):
     def __init__(
@@ -32,12 +38,13 @@ class GeneratedDataset(Dataset, ABC):
         regenerate: bool = False,
         generation_spec: Optional[GenerationSpec] = None,
         max_length: int = TOKENIZER_MAX_LENGTH,
-        train: bool = False
+        train: bool = False,
+        seed: Optional[int] = None,
     ):
         super().__init__()
 
         # fix random seed for reproducibility, the train flag makes sure that train and eval sets get different random seeds
-        seed = RANDOM_SEED + (not train)
+        seed = (seed or RANDOM_SEED) + (not train)
         torch.manual_seed(seed)
         np.random.seed(seed)
 
