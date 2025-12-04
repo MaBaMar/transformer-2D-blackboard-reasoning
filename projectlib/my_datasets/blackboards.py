@@ -21,14 +21,14 @@
 import copy
 from dataclasses import dataclass
 from typing import Optional
+from logging import getLogger, Logger
 
 import numpy as np
 import torch
-from torch.types import Number
 from tqdm import tqdm
 
 from projectlib.my_datasets._blackboard_operands import Addition, CarryOperation
-from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
+from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split
 
 @dataclass
 class BlackboardSpec:
@@ -43,6 +43,7 @@ class BlackboardSpec:
 # ------------------------------------------------------------
 # blackboard
 EVAL_PATH_BASE       = "datasets/bb_{}_eval.pt"
+TEST_PATH_BASE       = "datasets/bb_{}_test.pt"
 TRAIN_PATH_BASE      = "datasets/bb_{}_train.pt"
 BASE_GEN_SPEC        = GenerationSpec(10, 10, 20)
 BB_OPFRAME_HEIGHT    = 5    # this is the minimum number of rows required to fit the operation frame
@@ -77,7 +78,6 @@ class BBVocabTokenizer:
             BB_OPLINE_SEG_TOKEN: len(BB_OPTOKEN_LIST) + 15,
             **{token: len(BB_OPTOKEN_LIST) + 16 + i for i, token in enumerate(additional_tokens or [])},
         }
-        print("Token to ID mapping:", self.token_to_id)
         self.id_to_token: dict[int, str] = {v: k for k, v in self.token_to_id.items()}
 
     def encode(self, bb_grid: list[list[str]]) -> torch.Tensor:
@@ -247,47 +247,63 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         self,
         path: Optional[str] = None,
         seed: Optional[int] = None,
-        train: bool = True,
-        regenerate: bool = False,
+        split: Split = Split.EVAL,
+        regenerate: bool = True,
         generation_spec: GenerationSpec = BASE_GEN_SPEC,
         blackboard_spec: BlackboardSpec = BASE_BLACKBOARD_SPEC,
         additional_tokens: list[str] | None = None
     ):
-        path = path or (TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name()) if train else EVAL_PATH_BASE.format(blackboard_spec.operation.get_name()))
+        base_path = None
+        match split:
+            case Split.EVAL:
+                base_path = EVAL_PATH_BASE.format(blackboard_spec.operation.get_name())
+            case Split.TEST:
+                base_path = TEST_PATH_BASE.format(blackboard_spec.operation.get_name())
+            case Split.TRAIN:
+                base_path = TRAIN_PATH_BASE.format(blackboard_spec.operation.get_name())
+
+        path = path or base_path
 
         self.bb_spec: BlackboardSpec = blackboard_spec
         self.bb_2D_tokenizer: BBVocabTokenizer = BBVocabTokenizer(additional_tokens or [])
+
+        # add a logger for some helpful logging that can be disabled
+        self._datalogger: Logger = getLogger(__name__)
 
         # generate data
         super().__init__(
             path=path,
             regenerate=regenerate,
             generation_spec=generation_spec,
-            train=train,
+            split=split,
             seed=seed,
         )
 
+    def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, torch.Tensor] | int]]:
 
-    def __generate__(self, spec: GenerationSpec):
         inputs: list[dict[str, torch.Tensor]] = []
-        labels: list[dict[str, torch.Tensor]] = []
+        labels: list[dict[str, torch.Tensor] | int] = []
 
-        print(40*"_")
-        print("[blackboards.py] Starting data generation")
-        for _ in tqdm(range(spec.size)):
+        input_operands: list[tuple[int, int]] = []
+        match split:
+            case Split.EVAL: input_operands = self.eval_nums
+            case Split.TRAIN: input_operands = self.train_nums
+            case Split.TEST: input_operands = self.test_nums
+
+        for a, b in tqdm(input_operands, desc="Generating data"):
             # size is interpreted as the number of blackboard computation chains to generate
-            a = torch.randint(spec.low, spec.high, (1,)).item()
-            b = torch.randint(spec.low, spec.high, (1,)).item()
-
             if(self.bb_spec.operation.get_name() == 'subtraction') and a < b:
                 a, b = b, a
 
-            input_states, output_states = self._generate_blackboard_pairs(a, b)
+            input_states, output_states = self._generate_blackboard_pairs(a, b, split != Split.EVAL)
             inputs += input_states
             labels += output_states
 
-        print("[blackboards.py] Generated", spec.size, "blackboard chains encoded in", len(inputs), "data samples")
-        print(40*"_")
+        # helpful logging to inform the user about what type of data they generated
+        if(split == Split.EVAL):
+            self._datalogger.info(f"Generated {len(inputs)} blackboard input state - integer pairs")
+        else:
+            self._datalogger.info(f"Generated {split.size(spec)} blackboard chains encoded in {len(inputs)} data samples")
 
         return inputs, labels
 
@@ -299,41 +315,14 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         return self.data[idx], self.labels[idx]
 
     # ---------------- helpers (logically private methods) ----------------
-    def _generate_blackboard_pairs(self, a: Number, b: Number) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, torch.Tensor]]]:
+    def _generate_blackboard_pairs(self, a: int, b: int, generate_full_chain: bool) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, torch.Tensor] | int]]:
 
-        # perform hand addition or subtraction and store the digit steps in lists
-        max_input_length: int = max(np.floor(np.log10(a)).astype(np.int32), np.floor(np.log10(b)).astype(np.int32)) + 1
-
-        digits_a = np.empty(max_input_length, dtype=int)
-        digits_b = np.empty(max_input_length, dtype=int)
-        for i in range(max_input_length):
-            digits_a[max_input_length - i - 1] = a % 10
-            a //= 10
-            digits_b[max_input_length - i - 1] = b % 10
-            b //= 10
-
-        opframe_generator = BasicOpBlackboardIterator(digits_a, digits_b, self.bb_spec.operation)
-
-        if(self.bb_spec.width < opframe_generator.frame_width or self.bb_spec.height < opframe_generator.frame_height):
-            raise ValueError(f"Generated opframes will not fit the requested dimensions of {self.bb_spec.height} x {self.bb_spec.width}. \
-                               Input numbers require a size of at least {opframe_generator.frame_height} x {opframe_generator.frame_width}")
-
-        # randomize the position
-        p_x = 0
-        p_y = 0
-
-        if self.bb_spec.randomize_position:
-            r_max_x = self.bb_spec.width - opframe_generator.frame_width
-            r_max_y = self.bb_spec.height - opframe_generator.frame_height
-            if r_max_x > 0:
-                p_x = np.random.randint(0, r_max_x)
-            if r_max_y > 0:
-                p_y = np.random.randint(0, r_max_y)
+        opframe_generator, p_x, p_y = operands_to_bbchaingen(a, b, self.bb_spec)
 
         # generate solution sequence
         bb_chain: list[torch.Tensor] = []
 
-        for i, opframe in enumerate(opframe_generator):
+        for opframe in opframe_generator:
 
             # extend the blackboard to its full size
             blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.empty_id, dtype=torch.long)
@@ -343,14 +332,20 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 
             bb_chain.append(blackboard)
 
-        # add EOS blackboard
-        blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.pad_id, dtype=torch.long)
-        blackboard[0, 0] = self.bb_2D_tokenizer.bos_id
-        blackboard[0, 1] = self.bb_2D_tokenizer.eos_id
-        bb_chain.append(blackboard)
+            if not generate_full_chain: # we only care about the first blackboard for the evaluation set
+                break
 
-        # Note: we need copies for the label to avoid aliasing
-        return self._pack_to_input_format(bb_chain[:-1]), self._pack_to_input_format(bb_chain[1:], copy=True)
+        if generate_full_chain:
+            # add EOS blackboard
+            blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.pad_id, dtype=torch.long)
+            blackboard[0, 0] = self.bb_2D_tokenizer.bos_id
+            blackboard[0, 1] = self.bb_2D_tokenizer.eos_id
+            bb_chain.append(blackboard)
+
+            # Note: we need copies for the label to avoid aliasing
+            return self._pack_to_input_format(bb_chain[:-1]), self._pack_to_input_format(bb_chain[1:], copy=True)
+        else:
+            return self._pack_to_input_format(bb_chain), [self.bb_spec.operation.on_ints(a, b)]
 
     def _pack_to_input_format(self, bbs: list[torch.Tensor], copy: bool = False) -> list[dict[str, torch.Tensor]]:
 
@@ -369,6 +364,53 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 #
 # They are not in the utils.py file to avoid circular imports.
 # ------------------------------------------------------------
+
+def operands_to_bbchaingen(a: int, b: int, bb_spec: BlackboardSpec) -> tuple[BasicOpBlackboardIterator, int, int]:
+    """
+    Converts two numbers into a blackboard iterator and returns the iterator, as well as the randomized top-left-corner of the blackboard frame.
+
+    Args:
+        a (int): The first operand.
+        b (int): The second operand.
+        bb_spec (BlackboardSpec): The blackboard specification.
+
+    Returns:
+        tuple[BasicOpBlackboardIterator, int, int]: [it, x, y] where it is the blackboard iterator corresponding to `a (op) b` where op is specified in `bb_spec` and x, y are the randomized top-left-corner of the blackboard frame.
+        If the blackboard specification does not enable randomization, the top-left-corner is set to (0, 0).
+    """
+
+    # perform hand addition or subtraction and store the digit steps in lists
+    max_input_length: int = max(np.floor(np.log10(a)).astype(np.int32), np.floor(np.log10(b)).astype(np.int32)) + 1
+
+    digits_a = np.empty(max_input_length, dtype=int)
+    digits_b = np.empty(max_input_length, dtype=int)
+    for i in range(max_input_length):
+        digits_a[max_input_length - i - 1] = a % 10
+        a //= 10
+        digits_b[max_input_length - i - 1] = b % 10
+        b //= 10
+
+    opframe_generator = BasicOpBlackboardIterator(digits_a, digits_b, bb_spec.operation)
+
+    if(bb_spec.width < opframe_generator.frame_width or bb_spec.height < opframe_generator.frame_height):
+        raise ValueError(f"Generated opframes will not fit the requested dimensions of {bb_spec.height} x {bb_spec.width}. \
+                           Input numbers require a size of at least {opframe_generator.frame_height} x {opframe_generator.frame_width}")
+
+    # randomize the position
+    p_x = 0
+    p_y = 0
+
+    if bb_spec.randomize_position:
+        r_max_x = bb_spec.width - opframe_generator.frame_width
+        r_max_y = bb_spec.height - opframe_generator.frame_height
+        if r_max_x > 0:
+            p_x = np.random.randint(0, r_max_x)
+        if r_max_y > 0:
+            p_y = np.random.randint(0, r_max_y)
+
+    return opframe_generator, p_x, p_y
+
+
 def bb_prettyprint(board: torch.Tensor, tokenizer: Optional[BBVocabTokenizer] = None):
     """
     Pretty-print a tokenized blackboard

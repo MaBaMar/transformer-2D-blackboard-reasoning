@@ -22,7 +22,7 @@ applicable_configs = {
         #"blackboard",
     ],
     "digits": [1],
-    "sizes": [1],
+    "sizes": [1024],
 }
 
 def main(args):

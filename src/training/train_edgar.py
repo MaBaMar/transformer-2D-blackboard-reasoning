@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.models.edgar import Edgar
-from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, BlackboardSpec, Addition, bb_datasample_prettyprint
-from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split
+from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 
 
 
@@ -24,7 +24,7 @@ MODELS_PATH = "./models/"
 def compute_accuracy(logits, labels, pad_id=None):
     labels = labels[0]
     preds = logits.argmax(dim=-1)
-    
+
     labels = labels.reshape(-1)
     preds = preds.reshape(-1)
 
@@ -44,6 +44,7 @@ def train(
         name: str,
         model_name: str,
         train_size: int,
+        test_size: int,
         eval_size: int,
         digits: int,
         batch_size: int,
@@ -65,6 +66,7 @@ def train(
         config={
             "model": model_name,
             "train_size": train_size,
+            "test_size": test_size,
             "eval_size": eval_size,
             "digits": digits,
             "batch_size": batch_size,
@@ -83,23 +85,25 @@ def train(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    bb_dataset_train = TokenizedBlackboardDataset(
-        regenerate=True,
-        seed=seed,
-        generation_spec=GenerationSpec.digits(
-            size=train_size,
-            digits=digits
-        ),
+    spec = GenerationSpec.digits(
+        digits=digits,
+        eval_size=eval_size,
+        test_size=test_size,
+        train_size=train_size,
     )
 
-    bb_dataset_eval = TokenizedBlackboardDataset(
+    bb_dataset_train = TokenizedBlackboardDataset(
         regenerate=True,
-        train=False,
+        split=Split.TRAIN,
         seed=seed,
-        generation_spec=GenerationSpec.digits(
-            size=eval_size,
-            digits=digits
-        ),
+        generation_spec=spec,
+    )
+
+    bb_dataset_test = TokenizedBlackboardDataset(
+        regenerate=True,
+        split=Split.TEST,
+        seed=seed,
+        generation_spec=spec,
     )
 
     pad_id = bb_dataset_train.bb_2D_tokenizer.pad_id
@@ -107,17 +111,17 @@ def train(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     vocab_size = bb_dataset_train.bb_2D_tokenizer.vocab_size
 
-    collate_fn = make_collator_with_args(collate_blackboards, pad_token_id=pad_id, device=device)
+    collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=pad_id, device=device)
     train_loader = DataLoader(
-        bb_dataset_train, 
-        batch_size=batch_size, 
-        shuffle=True, 
+        bb_dataset_train,
+        batch_size=batch_size,
+        shuffle=True,
         collate_fn=collate_fn
     )
     eval_loader = DataLoader(
-        bb_dataset_eval, 
-        batch_size=batch_size, 
-        shuffle=True, 
+        bb_dataset_test,
+        batch_size=batch_size,
+        shuffle=True,
         collate_fn=collate_fn
     )
 
@@ -224,6 +228,7 @@ def main(args):
         model_name=args.model_name,
         digits=args.digits,
         train_size=args.train_size,
+        test_size=args.test_size,
         eval_size=args.eval_size,
         batch_size=args.batch_size,
         model_dimension=args.model_dimension,
@@ -248,6 +253,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--digits", type=int)
     parser.add_argument("--train_size", type=int)
+    parser.add_argument("--test_size", type=int)
     parser.add_argument("--eval_size", type=int)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--model_dimension", type=int)

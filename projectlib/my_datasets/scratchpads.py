@@ -3,17 +3,16 @@ import torch
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from typing import override, TypeAlias, Union, Optional
 
-from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec
+from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split
 from projectlib.my_datasets._operands import OPERATION, Operation
 from projectlib.my_datasets.utils import num_to_str, get_digits, digits_to_str
 
 
 
 EVAL_PATH = "datasets/scratchpads_eval.pt"
+TEST_PATH = "datasets/scratchpads_test.pt"
 TRAIN_PATH = "datasets/scratchpads_train.pt"
 
-
-BASE_SPEC = GenerationSpec(10, 10, 100)
 
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
@@ -36,28 +35,7 @@ class ScratchpadDataset(GeneratedDataset):
         The entries are of the following form
 
         {
-            'input': 'Example:
-
-                      Input: 8 9 + 9 9
-
-                      Target:
-
-                      &lt;scratch&gt;
-
-                      8 9 + 9 9 , C: 0
-
-                      8 + 9 , 8 C: 1 # added 9 + 9 = 8 carry 1
-
-                      , 8 8 C: 1 # added 8 + 9 + 1 = 8 carry 1
-
-                      1 8 8
-
-                      &lt;/scratch&gt;
-
-                      Result: 1 8 8
-
-
-                      Compute: 1 7 + 8 3',
+            'input': '1 7 + 8 3',
 
             'label': 'Input: 1 7 + 8 3
 
@@ -80,60 +58,60 @@ class ScratchpadDataset(GeneratedDataset):
     """
     def __init__(
         self,
+        generation_spec: GenerationSpec,
         path: Optional[str] = None,
         tokenizer: Optional[TokenizerType] = None,
-        train: bool = True,
+        split: Split = Split.EVAL,
         seed: Optional[int] = None,
-        regenerate: bool = False,
-        generation_spec: GenerationSpec = BASE_SPEC,
+        regenerate: bool = True,
         operand: Operation = "+",
     ):
         self.operand = operand
 
-        path = path if path else (TRAIN_PATH if train else EVAL_PATH)
+        base_path = None
+        match split:
+            case Split.EVAL:
+                base_path = EVAL_PATH
+            case Split.TEST:
+                base_path = TEST_PATH
+            case Split.TRAIN:
+                base_path = TRAIN_PATH
+
+        path = path if path else base_path
+
         super().__init__(
             path=path,
             tokenizer=tokenizer,
-            train=train,
+            split=split,
             regenerate=regenerate,
             generation_spec=generation_spec,
             seed=seed,
         )
 
     @override
-    def __generate__(self, spec: GenerationSpec):
+    def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL):
         """Generate the scratchpad dataset"""
 
         inputs = []
         labels = []
 
         numbers = []
-        for _ in range(spec.size):
-            a = torch.randint(spec.low, spec.high, (1,)).item()
-            b = torch.randint(spec.low, spec.high, (1,)).item()
+        match split:
+            case Split.EVAL: numbers = self.eval_nums
+            case Split.TEST: numbers = self.test_nums
+            case Split.TRAIN: numbers = self.train_nums
 
+        for a, b in numbers:
             if(self.operand == "-") and a < b:
                 a, b = b, a
 
-            numbers.append((a, b))
-
-        for a, b in numbers:
-            c = torch.randint(spec.low, spec.high, (1,)).item()
-            d = torch.randint(spec.low, spec.high, (1,)).item()
-
-            if(self.operand == "-") and c < d:
-                c, d = d, c
-
-            example_scratchpad = self._generate_scratchpad(c, d)
             target_scratchpad = self._generate_scratchpad(a, b)
 
-            inputs.append((
-                f"Example:\n{example_scratchpad}\n"
-                f"Compute: {num_to_str(a)} {self.operand} {num_to_str(b)}"
-            ))
+            inputs.append(f"{num_to_str(a)} {self.operand} {num_to_str(b)}")
             labels.append(target_scratchpad)
 
         return inputs, labels
+
 
     def _generate_scratchpad(self, a: int, b: int) -> str:
         """Generate the scratchpad for a and b"""
@@ -171,6 +149,7 @@ class ScratchpadDataset(GeneratedDataset):
             f"Target:\n<scratch>\n{scratchpad}</scratch>\n"
             f"Result: {num_to_str(int(OPERATION[self.operand](a, b)))}\n"
         )
+
 
     def _generate_line(self, prev_carry: int, result: list[int], d_a: list[int], d_b: list[int]) -> tuple[str, int]:
         """Generate the next line of the scratchpad"""
