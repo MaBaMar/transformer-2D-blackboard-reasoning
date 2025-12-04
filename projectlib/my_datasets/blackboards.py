@@ -189,8 +189,7 @@ class BasicOpBlackboardIterator:
 
         # this is the EOS state
         self.eos_frame: list[list[str]] = [[eos_filler for _ in range(self.frame_width)] for _ in range(self.frame_height)]
-        self.eos_frame[0][0] = BB_BOS_TOKEN
-        self.eos_frame[0][1] = BB_EOS_TOKEN
+        self.eos_frame[0][0] = BB_EOS_TOKEN
 
     def __iter__(self):
         """
@@ -328,8 +327,6 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.empty_id, dtype=torch.long)
             blackboard[p_y:p_y + opframe_generator.frame_height, p_x:p_x + opframe_generator.frame_width] = self.bb_2D_tokenizer.encode(opframe)
 
-            blackboard[0, 0] = self.bb_2D_tokenizer.bos_id
-
             bb_chain.append(blackboard)
 
             if not generate_full_chain: # we only care about the first blackboard for the evaluation set
@@ -338,8 +335,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
         if generate_full_chain:
             # add EOS blackboard
             blackboard = torch.full((self.bb_spec.height, self.bb_spec.width), self.bb_2D_tokenizer.pad_id, dtype=torch.long)
-            blackboard[0, 0] = self.bb_2D_tokenizer.bos_id
-            blackboard[0, 1] = self.bb_2D_tokenizer.eos_id
+            blackboard[0, 0] = self.bb_2D_tokenizer.eos_id
             bb_chain.append(blackboard)
 
             # Note: we need copies for the label to avoid aliasing

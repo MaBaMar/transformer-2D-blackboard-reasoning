@@ -9,32 +9,35 @@ import logging
 
 from src.models.edgar import Edgar
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results, BBChain
+from projectlib.my_datasets.base import Split
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, BlackboardSpec, Addition
-from projectlib.my_datasets.collators import collate_blackboards, make_collator_with_args
+from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-MODEL_NAME = "model.pth"
+MODEL_NAME = "model_new.pth"
 
 def check(train = False):
 
     spec = GenerationSpec(
-        size = 5,
+        train_size = 5000,
+        test_size = 5000,
+        eval_size = 5000,
         low = 200,
         high = 400
     )
 
     bb_spec = BlackboardSpec(5, 10, False, Addition())
 
-    bb_dataset = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec)
+    bb_dataset = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec, split=Split.TRAIN)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    B = 5
+    B = 64
     vocab_size = bb_dataset.bb_2D_tokenizer.vocab_size
     d_model = 64
 
-    collate_fn = make_collator_with_args(collate_blackboards, pad_token_id=bb_dataset.bb_2D_tokenizer.pad_id, device=device)
+    collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=bb_dataset.bb_2D_tokenizer.pad_id, device=device)
     data_loader = DataLoader(bb_dataset, batch_size=B, shuffle=False, collate_fn=collate_fn)
 
     print("Data loaded")
@@ -54,7 +57,7 @@ def check(train = False):
     if(train):
         optimizer = AdamW(model.parameters(), lr=0.5e-3)
         model.train()
-        for epoch in range(10):
+        for epoch in range(2):
             for step, (x_batch, y_batch) in enumerate(data_loader):
                 optimizer.zero_grad()
 
@@ -73,31 +76,31 @@ def check(train = False):
     reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
 
     print("Model loaded")
-    st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
-    st.show_steps()
+    # st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
+    # st.show_steps()
 
-    st = reasoner.compute_from_operands(20, 30)
-    st.show_steps()
-    print("Result is: ", st.result)
+    # st = reasoner.compute_from_operands(20, 30)
+    # st.show_steps()
+    # print("Result is: ", st.result)
 
 
-    st = reasoner.compute_from_operands(5, 19)
-    st.show_steps()
-    print("Result is: ", st.result)
+    # st = reasoner.compute_from_operands(5, 19)
+    # st.show_steps()
+    # print("Result is: ", st.result)
 
     st = reasoner.compute_from_operands(241, 389)
     st.show_steps()
     print("Result is: ", st.result)
 
-    st = reasoner.compute_from_operands(150, 280)
-    st.show_steps()
+    # st = reasoner.compute_from_operands(150, 280)
+    # st.show_steps()
 
-    st = reasoner.compute_from_operands(909, 256)
-    st.show_steps()
+    # st = reasoner.compute_from_operands(909, 256)
+    # st.show_steps()
 
-    for i, [x, _] in enumerate(data_loader):
-        chainlist = reasoner.compute_from_databatch(x)
-        print(chainlist_to_results(chainlist))
+    # for i, [x, _] in enumerate(data_loader):
+    #     chainlist = reasoner.compute_from_databatch(x)
+    #     print(chainlist_to_results(chainlist))
 
         # for chain in chainlist:
         #     chain.show_steps()
@@ -107,4 +110,4 @@ if __name__ == "__main__":
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
 
-    check(False)
+    check(True)

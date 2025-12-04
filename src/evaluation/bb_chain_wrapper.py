@@ -11,7 +11,7 @@ import torch
 import numpy as np
 
 from projectlib.my_datasets._blackboard_operands import Subtraction
-from projectlib.my_datasets.blackboards import BasicOpBlackboardIterator, BlackboardSpec, BBVocabTokenizer, bb_prettyprint
+from projectlib.my_datasets.blackboards import BasicOpBlackboardIterator, BlackboardSpec, BBVocabTokenizer, bb_prettyprint, operands_to_bbchaingen
 from projectlib.wrappertypes import BBChainGenerator
 
 ASCII_NUMBERS = "0123456789"
@@ -142,39 +142,10 @@ class BBChainReasoner:
             operand1, operand2 = operand2, operand1
             swapped = True
 
-        # convert operands to blackboard
-        max_input_length = max(np.floor(np.log10(operand1)).astype(np.int32), np.floor(np.log10(operand2)).astype(np.int32)) + 1
+        gen, p_x, p_y = operands_to_bbchaingen(operand1, operand2, self.spec)
 
-        # fast conversion
-        digits_a = np.empty(max_input_length, dtype=int)
-        digits_b = np.empty(max_input_length, dtype=int)
-        for i in range(max_input_length):
-            digits_a[max_input_length - i - 1] = operand1 % 10
-            operand1 //= 10
-            digits_b[max_input_length - i - 1] = operand2 % 10
-            operand2 //= 10
-
-        opframe_generator = BasicOpBlackboardIterator(digits_a, digits_b, self.spec.operation)
-        # only care about first state
-        st: list[list[str]] = next(opframe_generator)
-
-        # randomize the position
-        p_x = 0
-        p_y = 0
-
-        if self.spec.randomize_position:
-            r_max_x = self.spec.width - opframe_generator.frame_width
-            r_max_y = self.spec.height - opframe_generator.frame_height
-            if r_max_x > 0:
-                p_x = np.random.randint(0, r_max_x)
-            if r_max_y > 0:
-                p_y = np.random.randint(0, r_max_y)
-
-        blackboard = torch.full((self.spec.height, self.spec.width), self._tok.empty_id, dtype=torch.long, device=self.device)
-        blackboard[p_y:p_y + opframe_generator.frame_height, p_x:p_x + opframe_generator.frame_width] = self._tok.encode(st)
-
-        # set BOS token
-        blackboard[0, 0] = self._tok.bos_id
+        blackboard = torch.full((self.spec.height, self.spec.width), self._tok.empty_id, dtype=torch.long)
+        blackboard[p_y:p_y + gen.frame_height, p_x:p_x + gen.frame_width] = self._tok.encode(next(gen))
 
         res: BBChain = self.compute_from_single_blackboard(blackboard)
         res.set_negres(swapped)
@@ -200,7 +171,7 @@ class BBChainReasoner:
             bb_next = self.model.next_state(x) # dimension [B,L]
 
             # only propagate the state if it is not an end of chain state
-            state_propagation_mask = ~(bb_next[:, 1] == self._tok.eos_id).flatten()
+            state_propagation_mask = ~(bb_next[:, 0] == self._tok.eos_id).flatten()
 
             # keep track of the chains that require further propagation
             propagation_indices = propagation_indices[state_propagation_mask]

@@ -274,7 +274,7 @@ class _DecoderBlock(nn.Module):
             x = x + self.dropout(h2)
             return x
 
-class Edgar(nn.Module):
+class Edgar(BBChainGenerator):
     def __init__(
         self,
         vocab_size: int,
