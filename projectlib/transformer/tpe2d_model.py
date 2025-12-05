@@ -361,7 +361,7 @@ class TwoDTPERoPEAttention(nn.Module):
         # use a per-head view of the *input hidden state* (before Q/K/V projections)
         # q: [B,H,L,D_head]
         router_in = hidden_states.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
-
+        
         router_h = F.silu(self.router_up(router_in))      # [B,H,L,4*D_head]
         router_logits = self.router_down(router_h)        # [B,H,L,2]
         router_weights = F.softmax(router_logits, dim=-1) # [B,H,L,2]
