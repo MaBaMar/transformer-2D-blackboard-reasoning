@@ -163,7 +163,6 @@ class EOgar(nn.Module):
         num_heads_encoder: int,
         n_encoder_blocks: int,
         pad_id: int,
-        eos_id: int,
     ) -> None:
         """
         Implementation of our EOgar model.
@@ -179,7 +178,6 @@ class EOgar(nn.Module):
         super().__init__() # to torch module
 
         self.pad_id = pad_id
-        self.eos_id = eos_id
 
         self.encoder = Encoder(
             vocab_size=vocab_size,

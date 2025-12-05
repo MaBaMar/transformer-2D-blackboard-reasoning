@@ -7,7 +7,7 @@
 import torch
 import logging
 
-from src.models.edgar import Edgar
+from src.models.eogar import EOgar
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results, BBChain
 from projectlib.my_datasets.base import Split
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, BlackboardSpec, Addition
@@ -42,13 +42,11 @@ def check(train = False):
 
     print("Data loaded")
 
-    model = Edgar(
+    model = EOgar(
         vocab_size=vocab_size,
         d_model=d_model,
         num_heads_encoder=8,
-        num_heads_decoder=8,
         n_encoder_blocks=4,
-        n_decoder_blocks=4,
         pad_id=bb_dataset.bb_2D_tokenizer.pad_id
     ).to(device)
 
@@ -76,27 +74,28 @@ def check(train = False):
     reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
 
     print("Model loaded")
-    # st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
-    # st.show_steps()
+    st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
+    st.show_steps()
 
-    # st = reasoner.compute_from_operands(20, 30)
-    # st.show_steps()
-    # print("Result is: ", st.result)
+    st = reasoner.compute_from_operands(20, 30)
+    st.show_steps()
+    print("Result is: ", st.result)
 
 
-    # st = reasoner.compute_from_operands(5, 19)
-    # st.show_steps()
-    # print("Result is: ", st.result)
+    st = reasoner.compute_from_operands(5, 19)
+    st.show_steps()
+    print("Result is: ", st.result)
 
     st = reasoner.compute_from_operands(241, 389)
     st.show_steps()
     print("Result is: ", st.result)
+    
 
-    # st = reasoner.compute_from_operands(150, 280)
-    # st.show_steps()
+    st = reasoner.compute_from_operands(150, 280)
+    st.show_steps()
 
-    # st = reasoner.compute_from_operands(909, 256)
-    # st.show_steps()
+    st = reasoner.compute_from_operands(909, 256)
+    st.show_steps()
 
     # for i, [x, _] in enumerate(data_loader):
     #     chainlist = reasoner.compute_from_databatch(x)
