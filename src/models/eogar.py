@@ -163,6 +163,7 @@ class EOgar(nn.Module):
         num_heads_encoder: int,
         n_encoder_blocks: int,
         pad_id: int,
+        rope_mode: str = "2d",
     ) -> None:
         """
         Implementation of our EOgar model.
@@ -178,6 +179,7 @@ class EOgar(nn.Module):
         super().__init__() # to torch module
 
         self.pad_id = pad_id
+        self.rope_mode = rope_mode
 
         self.encoder = Encoder(
             vocab_size=vocab_size,
@@ -226,6 +228,16 @@ class EOgar(nn.Module):
         y_pos_col: torch.Tensor = y[2]
         y_key_padding_mask: torch.Tensor = y[3]
 
+
+        if self.rope_mode == "1d":
+            x_seq_idx = torch.arange(x_tokens.size(1), device=x_tokens.device).unsqueeze(0)
+            x_pos_row = x_seq_idx
+            x_pos_col = x_seq_idx
+
+            y_seq_idx = torch.arange(y_tokens.size(1), device=y_tokens.device).unsqueeze(0)
+            y_pos_row = y_seq_idx
+            y_pos_col = y_seq_idx
+
         context = self.encoder(
             input_ids=x_tokens,
             pos_row=x_pos_row,
@@ -264,6 +276,11 @@ class EOgar(nn.Module):
         x_pos_row: torch.Tensor = x[1]
         x_pos_col: torch.Tensor = x[2]
         x_key_padding_mask: torch.Tensor = x[3]
+
+        if self.rope_mode == "1d":
+            x_seq_idx = torch.arange(x_tokens.size(1), device=x_tokens.device).unsqueeze(0)
+            x_pos_row = x_seq_idx
+            x_pos_col = x_seq_idx
 
         context = self.encoder(
             input_ids=x_tokens,
