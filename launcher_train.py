@@ -6,7 +6,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 NAME = "Training EOgar"
-MODE = "local"      # "local", "euler"
+MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 1024
@@ -17,16 +17,16 @@ EVAL_SIZE = 1024
 
 applicable_configs = {
     "seed": [i for i in range(1)],
-    "digits": [3],
-    "train_sizes": [64],
-    "test_sizes": [16],
-    "batch_size": [1],      # Has to be 1 for now because of the sequence length problem!
+    "digits": [3, 4, 5],
+    "train_sizes": [2048],
+    "test_sizes": [256],
+    "batch_size": [64],      # Has to be 1 for now because of the sequence length problem!
     "model_spec": [
         # Model size: small
         { "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
 
         # Model size: 7 Million
-        # { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 64, "n_decoder_blocks": 64 },
+        { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 64, "n_decoder_blocks": 64 },
 
         # Model size: 15 Million
         # { "model_dimension": 64, "num_heads_encoder": 4, "num_heads_decoder": 4, "n_encoder_blocks": 128, "n_decoder_blocks": 128 },

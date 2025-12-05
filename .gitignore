@@ -220,3 +220,7 @@ checkpoints/
 
 # Ignore datacache for testscripts
 testscripts/.datacache/*
+
+# Ignore slurm output files
+
+slurm-*.out

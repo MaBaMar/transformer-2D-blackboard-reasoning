@@ -129,7 +129,6 @@ def train(
         num_heads_encoder=num_heads_encoder,
         n_encoder_blocks=n_encoder_blocks,
         pad_id=pad_id,
-        eos_id=bb_dataset_train.bb_2D_tokenizer.eos_id,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
