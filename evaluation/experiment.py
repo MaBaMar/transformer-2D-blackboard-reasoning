@@ -9,6 +9,7 @@ from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndB
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from src.models import EOgar
 from projectlib.my_datasets import *
 
 
@@ -26,49 +27,81 @@ MODEL_PATHS = {
 #
 
 
-def setup_model(model, device=-1):
-    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+def setup_model(model, digits: int, task: str, device=-1):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    tok = AutoTokenizer.from_pretrained(model, padding_side="left")
-    model = AutoModelForCausalLM.from_pretrained(
-        model, 
-        dtype="auto",
-        device_map="auto" if torch.cuda.is_available() else None,
-        quantization_config=quantization_config,
-    )
+    if task == "basic":
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
-    if tok.pad_token_id is None:
-        tok.pad_token = tok.eos_token
-    
-    pipe = pipeline(
-        "text-generation", 
-        model=model,
-        tokenizer=tok, 
-    )
+        tok = AutoTokenizer.from_pretrained(model, padding_side="left")
+        model = AutoModelForCausalLM.from_pretrained(
+            model,
+            dtype="auto",
+            device_map="auto" if torch.cuda.is_available() else None,
+            quantization_config=quantization_config,
+        )
 
-    return pipe, tok
+        if tok.pad_token_id is None:
+            tok.pad_token = tok.eos_token
+        
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tok,
+        )
+
+        return pipe, tok
+        
+    elif task == "scratchpad":
+        raise NotImplementedError("Implement scratchpads!")
+
+    elif task == "blackboard-1d":
+        raise NotImplementedError("Implement blackboard-1d!")
+
+    elif task == "blackboard-2d":
+        tok = BBVocabTokenizer()
+        model = EOgar.load_from_path(model_path)
+
+        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
+
+        return reasoner, tok
+
+    else:
+        raise TypeError("Unsupported task!")
 
 
 
 def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
     spec = GenerationSpec(
-        low=10**(digits - 1), 
+        low=10**(digits - 1),
         high=10**(digits),
         eval_size=size,
     )
 
     if task == "basic":
         return AdditionDataset(
-            regenerate=True,
+            split=Split.EVAL,
+            seed=seed,
             generation_spec=spec,
         )
     elif task == "scratchpad":
         return ScratchpadDataset(
-            regenerate=True,
+            split=Split.EVAL,
+            seed=seed,
             generation_spec=spec,
         )
-    elif task == "blackboard":
-        raise NotImplementedError("Implement blackboard!")
+    elif task == "blackboard-1d":
+        TokenizedBlackboardDataset(
+            split=Split.EVAL,
+            seed=seed,
+            generation_spec=spec,
+        )
+    elif task == "blackboard-2d":
+        TokenizedBlackboardDataset(
+            split=Split.EVAL,
+            seed=seed,
+            generation_spec=spec,
+        )
     else:
         raise TypeError("Unsupported task!")
     
@@ -91,15 +124,22 @@ def ask(input, task, pipe, tok):
         out = pipe(prompt, max_new_tokens=200 ,do_sample=False,
                     truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
         added = out[len(prompt):].strip()
-        print(f"Scratchpad output: {added}")
         m = re.findall(r"Result:\s*([0-9 ]+)", added)
         if m:
             raw = m[0].strip()
         else:
             return None
         pred = int(raw.replace(" ", ""))
+
+    elif task == "blackboard-1d":
+        raise NotImplementedError("Implement blackboard-1d!")
+
+    elif task == "blackboard-2d":
+        out = pipe.compute_from_databatch(input)
+        pred = chainlist_to_results(out)
+
     else:
-        raise NotImplementedError()
+        raise TypeError("Unsupported task!")
 
     return pred
     
@@ -108,10 +148,18 @@ def ask(input, task, pipe, tok):
 def check_prediction(prediction: str, label: str, task) -> int:
     if task == "basic":
         result_true = int(label[0])
+
     elif task == "scratch_pad":
         result_true = extract_label_number(label[0])
-    elif task == "blackboard":
-        raise NotImplementedError("Implement blackboard!")
+
+    elif task == "blackboard-1d":
+        raise NotImplementedError("Implement blackboard-1d!")
+
+    elif task == "blackboard-2d":
+        print(prediction)
+
+        print(label)
+
     else:
         raise TypeError("Unsupported task!")
 
@@ -147,6 +195,8 @@ def extract_label_number(label: str) -> int | None:
 def experiment(
         name: str,
         model_name: str,
+        model_path: str,
+        model_location: str,
         task: str,
         size: int,
         digits: int,
@@ -160,7 +210,6 @@ def experiment(
         project="blackboard-reasoning",
         config={
             "model": model_name,
-            "path_to_model": MODEL_PATHS[model_name],
             "task": task,
             "size": size,
             "digits": digits,
@@ -178,9 +227,9 @@ def experiment(
     #   Load the model and the dataset
     #
 
-    print(f"Evaluating {model_name} [{MODEL_PATHS[model_name]}] on {task} with {digits}-digits\n")
+    print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
 
-    pipe, tok = setup_model(MODEL_PATHS[model_name], device)
+    pipe, tok = setup_model(model_path, digits, task, device)
 
     dataset = load_dataset(task, size, digits)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
@@ -213,6 +262,8 @@ def main(args):
     experiment(
         name=args.name,
         model_name=args.model_name,
+        model_path=args.model_path,
+        model_location=args.model_location,
         task=args.task,
         digits=args.digits,
         size=args.size,
@@ -226,6 +277,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str)
     parser.add_argument("--model_name", type=str)
+    parser.add_argument("--model_path", type=str)
+    parser.add_argument("--model_location", type=str)
     parser.add_argument("--task", type=str)
     parser.add_argument("--digits", type=int)
     parser.add_argument("--size", type=int)

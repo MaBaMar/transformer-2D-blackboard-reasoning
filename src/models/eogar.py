@@ -1,7 +1,7 @@
 # ------------------------------------------------------------
-# edgar.py
+# eogar.py
 #
-# Encoder-Decoder Generative Algorithmic Reasoner
+# Encoder-Only Generative Algorithmic Reasoner
 #
 # Purpose: Full model implementation based on 2D rope and autoregressive reasoning step
 # generation for additions and subtractions
@@ -172,9 +172,7 @@ class EOgar(nn.Module):
             vocab_size (int): Vocabulary size.
             d_model (int): Model dimension.
             num_heads_encoder (int): Number of attention heads for encoder.
-            num_heads_decoder (int): Number of attention heads for decoder.
             n_encoder_blocks (int): Number of encoder blocks.
-            n_decoder_blocks (int): Number of decoder blocks.
         """
         super().__init__() # to torch module
 
@@ -295,3 +293,39 @@ class EOgar(nn.Module):
         out_tokens = logits.argmax(dim=-1)
 
         return out_tokens
+
+    @staticmethod
+    def load_from_path(model_path: str) -> EOgar:
+        """Load a locally stored model at the given path.
+
+        Args:
+            model_path (str): Path to the model.
+
+        Returns:
+            EOgar: Model initiated with the stored values.
+        """
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        checkpoint = torch.load(save_path, map_location=device)
+        config = checkpoint["config"]
+
+        vocab_size = config["vocab_size"]
+        d_model = config["d_model"]
+        num_heads_encoder = config["num_heads_encoder"]
+        n_encoder_blocks = config["n_encoder_blocks"]
+        rope_mode = config["rope_mode"]
+        epochs = config["epochs"]
+        train_size = config["train_size"]
+        digits = config["digits"]
+
+        model = MyTransformerModel(
+            vocab_size=vocab_size,
+            d_model=d_model,
+            num_heads=num_heads_encoder,
+            num_layers=n_encoder_blocks,
+            rope_mode=rope_mode,
+        )
+
+        model.load_state_dict(checkpoint["model_state_dict"])
+
+        return model

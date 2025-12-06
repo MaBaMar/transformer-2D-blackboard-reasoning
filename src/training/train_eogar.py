@@ -51,6 +51,7 @@ def train(
         model_dimension: int,
         num_heads_encoder: int,
         n_encoder_blocks: int,
+        rope_mode: str,
         learning_rate: float,
         epochs: int,
         seed: int,
@@ -71,6 +72,7 @@ def train(
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
             "n_encoder_blocks": n_encoder_blocks,
+            "rope_mode": rope_mode,
             "learning_rate": learning_rate,
             "epochs": epochs,
             "seed": seed,
@@ -198,14 +200,18 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_e{epochs}_s{train_size}_d{digits}_md{model_dimension}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_e{epochs}_s{train_size}_d{digits}.pt")
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
             "vocab_size": vocab_size,
             "d_model": model_dimension,
-            "num_heads_encoder": 4,
-            "n_encoder_blocks": 2,
+            "num_heads_encoder": num_heads_encoder,
+            "n_encoder_blocks": n_encoder_blocks,
+            "rope_mode": rope_mode,
+            "epochs": epochs,
+            "train_size": train_size,
+            "digits": digits,
         }
     }, save_path)
 
@@ -225,6 +231,7 @@ def main(args):
         model_dimension=args.model_dimension,
         num_heads_encoder=args.num_heads_encoder,
         n_encoder_blocks=args.n_encoder_blocks,
+        rope_mode=args.rope_mode,
         learning_rate=args.learning_rate,
         epochs=args.epochs,
         seed=args.seed,
@@ -248,6 +255,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--num_heads_encoder", type=int)
     parser.add_argument("--n_encoder_blocks", type=int)
+    parser.add_argument("--rope_mode", type=str)
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--seed", type=int, default=0)

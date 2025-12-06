@@ -2,12 +2,16 @@
 from .base import GeneratedDataset, GenerationSpec
 from .additions import AdditionDataset
 from .scratchpads import ScratchpadDataset
-from .blackboards import TokenizedBlackboardDataset
+from .blackboards import TokenizedBlackboardDataset, BBVocabTokenizer
 
 __all__ = [
     "GeneratedDataset",
     "GenerationSpec",
+    
     "AdditionDataset",
+    
     "ScratchpadDataset",
+
     "TokenizedBlackboardDataset",
+    "BBVocabTokenizer",
 ]

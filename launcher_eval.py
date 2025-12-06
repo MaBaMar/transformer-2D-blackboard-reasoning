@@ -5,44 +5,49 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Baselines"
-MODE = "local"      # "local", "euler"
+NAME = "Evaluation_debug"
+MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
+EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
+NUM_SEEDS = 1
+
 applicable_configs = {
-    "seed": [i for i in range(1)],
+    "seed": [i for i in range(NUM_SEEDS)],
     "models": [
-        #"Llama-13B",
-        "Llama-8B",
-        #"Llama-1B",
+        # Base
+        # { "name": "todo", "path": "todo", "remote": "local", "task": "basic" },
+
+        # Scratchpad
+        # { "name": "todo", "path": "todo", "location": "local", "task": "scratchpad" },
+
+        # 1D-RoPE
+        # { "name": "todo", "path": "todo", "location": "local", "task": "blackboard-1d" },
+
+        # 2D-RoPE
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e10_s2048_d5", "location": "local", "task": "blackboard-2d" },
     ],
-    "task": [
-        "basic",
-        #"scratchpad",
-        #"blackboard",
-    ],
-    "digits": [1],
-    "sizes": [1024],
+    "digits": [5], # [5, 10],
 }
 
 def main(args):
     command_list = []
     for model in applicable_configs["models"]:
-        for task in applicable_configs["task"]:
-            for digits in applicable_configs["digits"]:
-                for size in applicable_configs["sizes"]:
-                    for seed in applicable_configs["seed"]:
-                        flags = {
-                            "name": NAME,
-                            "model_name": model,
-                            "task": task,
-                            "digits": digits,
-                            "size": size,
-                            "seed": seed,
-                            "logging": LOGGING,
-                        }
-                        cmd = generate_base_command(experiment, flags=flags)
-                        command_list.append(cmd)
+        for digits in applicable_configs["digits"]:
+            for seed in applicable_configs["seed"]:
+                flags = {
+                    "name": NAME,
+                    "model_name": model["name"],
+                    "model_path": model["path"],
+                    "model_location": model["location"],
+                    "task": model["task"],
+                    "digits": digits,
+                    "size": EVAL_SIZE,
+                    "seed": seed,
+                    "logging": LOGGING,
+                }
+                cmd = generate_base_command(experiment, flags=flags)
+                command_list.append(cmd)
 
     generate_run_commands(
         command_list,

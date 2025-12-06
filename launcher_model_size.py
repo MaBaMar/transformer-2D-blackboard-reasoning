@@ -5,7 +5,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Training_EOgar_debug"
+NAME = "Modelsize_EOgar"
 MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
@@ -18,16 +18,25 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [3, 4, 5, 6, 8, 10],
+    "digits": [5, 10],
     "train_sizes": [2048],
     "test_sizes": [256],
     "batch_size": [64],
     "model_spec": [
         # Vary encoder blocks
-        { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        # { "model_name": "EOgar-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
+        { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar-blocks-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        { "model_name": "EOgar-blocks-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
+        # { "model_name": "EOgar-blocks-6M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 128 },
+        # { "model_name": "EOgar-blocks-13M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 256 },
+
+        # Vary number of heads
+        { "model_name": "EOgar-heads-8-3M", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 64 },
+        { "model_name": "EOgar-heads-16-3M", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 64 },
+
+        # Vary model dimension
+        { "model_name": "EOgar-dim-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-dim-12M", "model_dimension": 128, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
     ],
     "rope_mode": ["2d"], # ["1d", "2d"],
     "learning_rate": [1e-3],
@@ -47,7 +56,7 @@ def main(args):
                                     for seed in applicable_configs["seed"]:
                                         flags = {
                                             "name": NAME,
-                                            "model_name": model_spec["model_name"] + f"-{rope_mode}",
+                                            "model_name": model_spec["model_name"],
                                             "digits": digits,
                                             "train_size": train_size,
                                             "test_size": test_size,
