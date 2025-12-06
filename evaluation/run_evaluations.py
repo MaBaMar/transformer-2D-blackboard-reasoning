@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from src.models.eogar import EOgar
 from projectlib.my_datasets import *
-from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
+from projectlib.my_datasets.collators import collate_bb_state_int, make_collator_with_args
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
 
 
@@ -102,16 +102,20 @@ def load_dataset(task: str, size: int, digits: int, seed: int, batch_size: int =
         return DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     elif task == "blackboard-1d" or task == "blackboard-2d":
+        # TODO make this parameters of launcher
+        bb_spec = BlackboardSpec(5, 10, False, Addition())
+
         dataset = TokenizedBlackboardDataset(
             split=Split.EVAL,
             seed=seed,
             generation_spec=spec,
+            blackboard_spec=bb_spec,
         )
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         pad_id = dataset.bb_2D_tokenizer.pad_id
 
-        collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=pad_id, device=device)
+        collate_fn = make_collator_with_args(collate_bb_state_int, pad_token_id=pad_id, device=device)
 
         return DataLoader(
             dataset,
@@ -153,8 +157,9 @@ def ask(input, task, pipe, tok):
         raise NotImplementedError("Implement blackboard-1d!")
 
     elif task == "blackboard-2d":
-        out = pipe.compute_from_databatch(input)
-        pred = chainlist_to_results(out)
+        # TODO extend to larger batch sizes
+        out = pipe.compute_from_single_blackboard(input[0][0])
+        pred = out
 
     else:
         raise TypeError("Unsupported task!")
@@ -174,9 +179,8 @@ def check_prediction(prediction: str, label: str, task) -> int:
         raise NotImplementedError("Implement blackboard-1d!")
 
     elif task == "blackboard-2d":
-        print(prediction)
-
-        print(label)
+        prediction = prediction.result
+        result_true = label
 
     else:
         raise TypeError("Unsupported task!")
@@ -258,8 +262,13 @@ def experiment(
     correct = 0.0
 
     for element in tqdm(dataloader):
-        input_text = element["input"]
-        label = element["label"]
+        if task in ["blackboard-1d", "blackboard-2d"]:
+            input_text = element[0]
+            label = element[-1]
+
+        else:
+            input_text = element["input"]
+            label = element["label"]
 
         prediction = ask(input_text, task, pipe, tok)
 
