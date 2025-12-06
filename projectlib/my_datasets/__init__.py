@@ -1,12 +1,13 @@
 # __init__.py
-from .base import GeneratedDataset, GenerationSpec
+from .base import GeneratedDataset, GenerationSpec, Split
 from .additions import AdditionDataset
 from .scratchpads import ScratchpadDataset
-from .blackboards import TokenizedBlackboardDataset, BBVocabTokenizer
+from .blackboards import TokenizedBlackboardDataset, BBVocabTokenizer, BlackboardSpec, Addition
 
 __all__ = [
     "GeneratedDataset",
     "GenerationSpec",
+    "Split",
     
     "AdditionDataset",
     
@@ -14,4 +15,6 @@ __all__ = [
 
     "TokenizedBlackboardDataset",
     "BBVocabTokenizer",
+    "BlackboardSpec",
+    "Addition",
 ]

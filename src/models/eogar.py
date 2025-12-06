@@ -295,7 +295,7 @@ class EOgar(nn.Module):
         return out_tokens
 
     @staticmethod
-    def load_from_path(model_path: str) -> EOgar:
+    def load_from_path(model_path: str) -> "EOgar":
         """Load a locally stored model at the given path.
 
         Args:
@@ -306,23 +306,22 @@ class EOgar(nn.Module):
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        checkpoint = torch.load(save_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device)
         config = checkpoint["config"]
 
         vocab_size = config["vocab_size"]
         d_model = config["d_model"]
         num_heads_encoder = config["num_heads_encoder"]
         n_encoder_blocks = config["n_encoder_blocks"]
+        pad_id = config["pad_id"]
         rope_mode = config["rope_mode"]
-        epochs = config["epochs"]
-        train_size = config["train_size"]
-        digits = config["digits"]
 
-        model = MyTransformerModel(
+        model = EOgar(
             vocab_size=vocab_size,
             d_model=d_model,
-            num_heads=num_heads_encoder,
-            num_layers=n_encoder_blocks,
+            num_heads_encoder=num_heads_encoder,
+            n_encoder_blocks=n_encoder_blocks,
+            pad_id=pad_id,
             rope_mode=rope_mode,
         )
 

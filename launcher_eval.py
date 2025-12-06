@@ -1,12 +1,12 @@
 import argparse
 
-from evaluation import experiment
+from evaluation import run_evaluations as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
 NAME = "Evaluation_debug"
-MODE = "euler"      # "local", "euler"
+MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
@@ -25,9 +25,9 @@ applicable_configs = {
         # { "name": "todo", "path": "todo", "location": "local", "task": "blackboard-1d" },
 
         # 2D-RoPE
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e10_s2048_d5", "location": "local", "task": "blackboard-2d" },
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e1_s64_d3.pt", "location": "local", "task": "blackboard-2d" },
     ],
-    "digits": [5], # [5, 10],
+    "digits": [3], # [5, 10],
 }
 
 def main(args):

@@ -9,8 +9,10 @@ from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndB
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.models import EOgar
+from src.models.eogar import EOgar
 from projectlib.my_datasets import *
+from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
+from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
 
 
 
@@ -60,7 +62,10 @@ def setup_model(model, digits: int, task: str, device=-1):
 
     elif task == "blackboard-2d":
         tok = BBVocabTokenizer()
-        model = EOgar.load_from_path(model_path)
+        model = EOgar.load_from_path(model)
+
+        # TODO make this parameters of the evaluation maybe, or define it in a central location
+        bb_spec = BlackboardSpec(5, 10, False, Addition())
 
         reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
 
@@ -71,7 +76,7 @@ def setup_model(model, digits: int, task: str, device=-1):
 
 
 
-def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
+def load_dataset(task: str, size: int, digits: int, seed: int, batch_size: int = 1) -> DataLoader:
     spec = GenerationSpec(
         low=10**(digits - 1),
         high=10**(digits),
@@ -79,29 +84,42 @@ def load_dataset(task: str, size: int, digits: int) -> GeneratedDataset:
     )
 
     if task == "basic":
-        return AdditionDataset(
+        dataset = AdditionDataset(
             split=Split.EVAL,
             seed=seed,
             generation_spec=spec,
         )
+
+        return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    
     elif task == "scratchpad":
-        return ScratchpadDataset(
+        dataset = ScratchpadDataset(
             split=Split.EVAL,
             seed=seed,
             generation_spec=spec,
         )
-    elif task == "blackboard-1d":
-        TokenizedBlackboardDataset(
+
+        return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    elif task == "blackboard-1d" or task == "blackboard-2d":
+        dataset = TokenizedBlackboardDataset(
             split=Split.EVAL,
             seed=seed,
             generation_spec=spec,
         )
-    elif task == "blackboard-2d":
-        TokenizedBlackboardDataset(
-            split=Split.EVAL,
-            seed=seed,
-            generation_spec=spec,
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        pad_id = dataset.bb_2D_tokenizer.pad_id
+
+        collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=pad_id, device=device)
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=collate_fn
         )
+
     else:
         raise TypeError("Unsupported task!")
     
@@ -231,8 +249,7 @@ def experiment(
 
     pipe, tok = setup_model(model_path, digits, task, device)
 
-    dataset = load_dataset(task, size, digits)
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+    dataloader = load_dataset(task, size, digits, seed)
 
     #
     #   Evaluate the performance on the dataset

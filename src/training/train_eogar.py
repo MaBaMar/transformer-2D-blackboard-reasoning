@@ -208,6 +208,7 @@ def train(
             "d_model": model_dimension,
             "num_heads_encoder": num_heads_encoder,
             "n_encoder_blocks": n_encoder_blocks,
+            "pad_id": pad_id,
             "rope_mode": rope_mode,
             "epochs": epochs,
             "train_size": train_size,
