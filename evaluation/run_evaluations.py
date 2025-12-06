@@ -168,7 +168,7 @@ def ask(input, task, pipe, tok):
     
 
 
-def check_prediction(prediction: str, label: str, task) -> int:
+def check_prediction(prediction, label, task) -> int:
     if task == "basic":
         result_true = int(label[0])
 
@@ -184,8 +184,6 @@ def check_prediction(prediction: str, label: str, task) -> int:
 
     else:
         raise TypeError("Unsupported task!")
-
-    print(f"result_true: {result_true} and result_pred: {prediction}")
 
     if result_true == prediction:
         return 1
