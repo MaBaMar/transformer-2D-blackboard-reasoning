@@ -16,16 +16,16 @@ applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "models": [
         # Base
-        # { "name": "todo", "path": "todo", "remote": "local", "task": "basic" },
+        # { "name": "todo", "path": "todo", "task": "basic" },
 
         # Scratchpad
-        # { "name": "todo", "path": "todo", "location": "local", "task": "scratchpad" },
+        # { "name": "todo", "path": "todo", "task": "scratchpad" },
 
         # 1D-RoPE
-        # { "name": "todo", "path": "todo", "location": "local", "task": "blackboard-1d" },
+        # { "name": "todo", "path": "todo", "task": "blackboard-1d" },
 
         # 2D-RoPE
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e1_s64_d3.pt", "location": "local", "task": "blackboard-2d" },
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e1_s64_d3.pt", "task": "blackboard-2d" },
     ],
     "digits": [3], # [5, 10],
 }
@@ -39,7 +39,6 @@ def main(args):
                     "name": NAME,
                     "model_name": model["name"],
                     "model_path": model["path"],
-                    "model_location": model["location"],
                     "task": model["task"],
                     "digits": digits,
                     "size": EVAL_SIZE,

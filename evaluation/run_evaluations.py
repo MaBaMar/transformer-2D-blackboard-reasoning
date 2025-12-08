@@ -29,15 +29,15 @@ MODEL_PATHS = {
 #
 
 
-def setup_model(model, digits: int, task: str, device=-1):
+def setup_model(model_path, digits: int, task: str, device=-1):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if task == "basic":
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
-        tok = AutoTokenizer.from_pretrained(model, padding_side="left")
+        tok = AutoTokenizer.from_pretrained(model_path, padding_side="left")
         model = AutoModelForCausalLM.from_pretrained(
-            model,
+            model_path,
             dtype="auto",
             device_map="auto" if torch.cuda.is_available() else None,
             quantization_config=quantization_config,
@@ -62,7 +62,7 @@ def setup_model(model, digits: int, task: str, device=-1):
 
     elif task == "blackboard-2d":
         tok = BBVocabTokenizer()
-        model = EOgar.load_from_path(model)
+        model = EOgar.load_from_path(model_path)
 
         # TODO make this parameters of the evaluation maybe, or define it in a central location
         bb_spec = BlackboardSpec(5, 10, False, Addition())
@@ -216,7 +216,6 @@ def experiment(
         name: str,
         model_name: str,
         model_path: str,
-        model_location: str,
         task: str,
         size: int,
         digits: int,
@@ -287,7 +286,6 @@ def main(args):
         name=args.name,
         model_name=args.model_name,
         model_path=args.model_path,
-        model_location=args.model_location,
         task=args.task,
         digits=args.digits,
         size=args.size,
@@ -302,7 +300,6 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str)
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--model_path", type=str)
-    parser.add_argument("--model_location", type=str)
     parser.add_argument("--task", type=str)
     parser.add_argument("--digits", type=int)
     parser.add_argument("--size", type=int)
