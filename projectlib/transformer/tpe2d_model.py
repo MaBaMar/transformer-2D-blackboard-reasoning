@@ -508,7 +508,7 @@ class CausalTransformer2DTPE(nn.Module):
         targets: [B,L] or None
         """
 
-        x = self.tok_emb(input_ids) * math.sqrt(self.d_model)
+        x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.drop(x)
 
         for layer in self.layers:

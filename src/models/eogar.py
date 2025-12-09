@@ -71,8 +71,8 @@ class Encoder(nn.Module):
         key_padding_mask: [B,L] (True where padded)
         targets: [B,L] or None
         """
-
-        x = self.tok_emb(input_ids) * math.sqrt(self.d_model)
+        
+        x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.dropout(x)
 
         for layer in self.transformer_blocks:
