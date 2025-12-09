@@ -1,6 +1,8 @@
 import os
 import torch
 import numpy as np
+import random
+import math
 
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
@@ -53,9 +55,9 @@ class GenerationSpec:
         """
         return GenerationSpec(
             eval_size=eval_size,
-            test_size=test_size, 
+            test_size=test_size,
             train_size=train_size,
-            low=1, 
+            low=1,
             high=10**digits
         )
 
@@ -65,12 +67,13 @@ class GeneratedDataset(Dataset, ABC):
     def __init__(
         self,
         path: str,
-        generation_spec: GenerationSpec,
+        generation_spec: GenerationSpec | None,
         tokenizer: Optional[TokenizerType] = None,
         regenerate: bool = True,
         max_length: int = TOKENIZER_MAX_LENGTH,
         split: Split = Split.EVAL,
         seed: Optional[int] = None,
+        disallow_op_permutations: bool = False
     ):
         super().__init__()
 
@@ -78,6 +81,7 @@ class GeneratedDataset(Dataset, ABC):
         seed = seed if seed else RANDOM_SEED
         torch.manual_seed(seed)
         np.random.seed(seed)
+        random.seed(seed)
 
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -90,7 +94,7 @@ class GeneratedDataset(Dataset, ABC):
             self.data = saved["data"]
             self.labels = saved["labels"]
         elif generation_spec:
-            numbers = GeneratedDataset._sample_numbers(generation_spec)
+            numbers = GeneratedDataset._sample_numbers(generation_spec, disallow_op_permutations)
 
             e_s = generation_spec.eval_size
             et_s = e_s + generation_spec.test_size
@@ -141,18 +145,38 @@ class GeneratedDataset(Dataset, ABC):
             }
 
         return {"input": input, "label": label}
-    
 
     @staticmethod
-    def _sample_numbers(spec: GenerationSpec) -> list[tuple[int, int]]:
-        size = spec.eval_size + spec.test_size + spec.train_size
+    def _sample_numbers(spec: GenerationSpec, disallow_permutations: bool) -> list[tuple[int, int]]:
+        """
+        Samples non-repeating tuples of numbers within the given range.
 
-        numbers = []
+        Warning: Sampling both (x, y) and (y, x) is allowed for x != y.
+        """
+        span = spec.high - spec.low # hi is exclusive
 
-        for _ in range(size):
-            a = torch.randint(spec.low, spec.high, (1,)).item()
-            b = torch.randint(spec.low, spec.high, (1,)).item()
+        if disallow_permutations:
+            total_samples = span * (span - 1) // 2
+        else:
+            total_samples = span * span
 
-            numbers.append((a, b))
+        indices = random.sample(range(total_samples), spec.train_size + spec.test_size + spec.eval_size)
+        values: list[tuple[int, int]] = []
 
-        return numbers
+        # convert indices to (i, j) pairs
+        if disallow_permutations:
+            for k in indices:
+                row = (math.isqrt(8 * k + 1) - 1) // 2
+                col = k - row * (row + 1) // 2
+                values.append((spec.low + row, spec.low + col))
+
+            # double check validity of generation:  make sure that overlapping values are symmetric in values and v2
+            v2 = [(j, i) for i, j in values]
+            inters = set(values).intersection(set(v2))
+            for i, j in inters:
+                assert i == j, f"Duplicate values found: {(i, j), (j, i)}"
+        else:
+            values = [(spec.low + i // span, spec.low + i % span) for i in indices]
+
+        assert len(values) == len(set(values)), f"Duplicate values found: {values}"
+        return values
