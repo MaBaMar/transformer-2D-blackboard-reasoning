@@ -150,8 +150,11 @@ class GeneratedDataset(Dataset, ABC):
     def _sample_numbers(spec: GenerationSpec, disallow_permutations: bool) -> list[tuple[int, int]]:
         """
         Samples non-repeating tuples of numbers within the given range.
+        Args:
+            spec (GenerationSpec): The specification for the generation.
+            disallow_permutations (bool): Whether to disallow permutations of the operands.
 
-        Warning: Sampling both (x, y) and (y, x) is allowed for x != y.
+        Warning: Sampling both (x, y) and (y, x) is allowed for x != y unless disallow_permutations is True.
         """
         span = spec.high - spec.low # hi is exclusive
 
