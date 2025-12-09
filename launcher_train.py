@@ -6,11 +6,11 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 NAME = "Training_EOgar_debug"
-MODE = "euler"      # "local", "euler"
+MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 1024
-NUM_SEEDS = 10
+NUM_SEEDS = 1
 
 #
 #   Model parameters and corresponding sizes
@@ -18,8 +18,8 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [3, 4, 5, 6, 8, 10],
-    "train_sizes": [2048],
+    "digits": [3], # [3, 4, 5, 6, 8, 10],
+    "train_sizes": [64], #[2048],
     "test_sizes": [256],
     "batch_size": [64],
     "model_spec": [

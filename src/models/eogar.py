@@ -128,11 +128,13 @@ class Head(nn.Module):
             self,
             vocab_size: int,
             d_model: int,
+            pad_id: int,
         ) -> None:
             super().__init__()
             # building blocks
             self.ln = nn.LayerNorm(d_model)
             self.head = nn.Linear(d_model, vocab_size, bias=False)
+            self.pad_id = pad_id
 
         def forward(
             self,
@@ -148,7 +150,7 @@ class Head(nn.Module):
                 loss = F.cross_entropy(
                     logits.view(-1, logits.size(-1)),
                     targets.view(-1),
-                    ignore_index=pad_id
+                    ignore_index=self.pad_id
                 )
 
             return logits, loss
@@ -189,6 +191,7 @@ class EOgar(nn.Module):
         self.head = Head(
             vocab_size=vocab_size,
             d_model=d_model,
+            pad_id=pad_id,
         )
 
 

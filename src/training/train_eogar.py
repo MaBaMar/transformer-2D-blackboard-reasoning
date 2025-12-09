@@ -21,22 +21,35 @@ MODELS_PATH = "./models/"
 
 
 
-def compute_accuracy(logits, labels, pad_id=None):
+def compute_accuracy(logits, labels):
     labels = labels[0]
     preds = logits.argmax(dim=-1)
 
+    if labels.shape != preds.shape:
+        return 0, 0
+    
+    output_wise = (preds == labels).all(dim=1).float().mean().item()
+
+    print(f"output_wise={output_wise}")
+
+    return output_wise
+
+
+def compute_accuracy_pt(logits, labels):
+    labels = labels[0]
+    preds = logits.argmax(dim=-1)
+
+    if labels.shape != preds.shape:
+        return 0, 0
+    
     labels = labels.reshape(-1)
     preds = preds.reshape(-1)
 
-    if labels.shape != preds.shape:
-        return 0
+    token_wise = (preds == labels).float().mean().item()
 
-    if pad_id is not None:
-        mask = (labels != pad_id).float()
-        correct = (preds == labels).float() * mask
-        return correct.sum().item() / mask.sum().item()
-    else:
-        return (preds == labels).float().mean().item()
+    print(f"token_wise={token_wise}")
+
+    return token_wise
 
 
 
@@ -116,7 +129,7 @@ def train(
         shuffle=True,
         collate_fn=collate_fn
     )
-    eval_loader = DataLoader(
+    test_loader = DataLoader(
         bb_dataset_test,
         batch_size=batch_size,
         shuffle=True,
@@ -145,6 +158,7 @@ def train(
         model.train()
 
         train_acc = 0.0
+        train_acc_pt = 0.0
         train_loss = 0.0
 
         for step, (x_batch, y_batch) in enumerate(train_loader):
@@ -162,35 +176,42 @@ def train(
                 "loss": loss.item(),
             })
 
-            train_acc += compute_accuracy(logits, y_batch, pad_id)
+            train_acc += compute_accuracy(logits, y_batch)
+            train_acc_pt += compute_accuracy_pt(logits, y_batch)
             train_loss += loss.item()
 
         train_acc /= len(train_loader)
+        train_acc_pt /= len(train_loader)
         train_loss /= len(train_loader)
 
         #   Compute performance on evaluation set
 
         model.eval()
 
-        eval_acc = 0.0
-        eval_loss = 0.0
+        test_acc = 0.0
+        test_acc_pt = 0.0
+        test_loss = 0.0
 
         with torch.no_grad():
-            for x_batch, y_batch in eval_loader:
+            for x_batch, y_batch in test_loader:
                 logits, loss = model(x_batch, y_batch)
 
-                eval_acc += compute_accuracy(logits, y_batch, pad_id)
-                eval_loss += loss.item()
+                test_acc += compute_accuracy(logits, y_batch)
+                test_acc_pt += compute_accuracy_pt(logits, y_batch)
+                test_loss += loss.item()
 
-        eval_acc /= len(eval_loader)
-        eval_loss /= len(eval_loader)
+        test_acc /= len(test_loader)
+        test_acc_pt /= len(test_loader)
+        test_loss /= len(test_loader)
 
         wandb.log({
             "epoch": epoch,
             "train_acc": train_acc,
+            "train_acc_pt": train_acc_pt,
             "train_loss": train_loss,
-            "eval_acc": eval_acc,
-            "eval_loss": eval_loss,
+            "test_acc": test_acc,
+            "test_acc_pt": test_acc_pt,
+            "test_loss": test_loss,
         })
 
     wandb.finish()
