@@ -5,8 +5,8 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Evaluation_debug"
-MODE = "local"      # "local", "euler"
+NAME = "Evaluation_test"
+MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
@@ -27,7 +27,7 @@ applicable_configs = {
         # 2D-RoPE
         { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e1_s64_d3.pt", "task": "blackboard-2d" },
     ],
-    "digits": [3], # [5, 10],
+    "digits": [3, 5],
 }
 
 def main(args):

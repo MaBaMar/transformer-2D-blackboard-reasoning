@@ -30,8 +30,6 @@ def compute_accuracy(logits, labels):
     
     output_wise = (preds == labels).all(dim=1).float().mean().item()
 
-    print(f"output_wise={output_wise}")
-
     return output_wise
 
 
@@ -46,8 +44,6 @@ def compute_accuracy_pt(logits, labels):
     preds = preds.reshape(-1)
 
     token_wise = (preds == labels).float().mean().item()
-
-    print(f"token_wise={token_wise}")
 
     return token_wise
 
