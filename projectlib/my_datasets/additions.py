@@ -59,6 +59,7 @@ class AdditionDataset(GeneratedDataset):
             regenerate=regenerate,
             generation_spec=generation_spec,
             seed=seed,
+            disallow_op_permutations=self.operand == "-"
         )
 
     @override
@@ -72,9 +73,6 @@ class AdditionDataset(GeneratedDataset):
         labels = []
 
         for (a, b) in self.eval_nums:
-            if(self.operand == "-") and a < b:
-                a, b = b, a
-
             func = num_to_str if self.spaces else lambda x: x
 
             inputs.append(f"{func(a)} {self.operand} {func(b)}")

@@ -16,6 +16,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
+from projectlib.wrappertypes import BBChainGenerator
 
 class FeedForward(nn.Module):
     def __init__(
@@ -141,7 +142,7 @@ class Head(nn.Module):
             context: torch.Tensor,
             targets: Optional[torch.Tensor] = None,
         ) -> torch.Tensor:
-            
+
             h = self.ln(context)
             logits = self.head(h)
 
@@ -157,7 +158,7 @@ class Head(nn.Module):
 
 
 
-class EOgar(nn.Module):
+class EOgar(BBChainGenerator):
     def __init__(
         self,
         vocab_size: int,
@@ -186,7 +187,7 @@ class EOgar(nn.Module):
             d_model=d_model,
             num_heads=num_heads_encoder,
             num_blocks=n_encoder_blocks
-        )   
+        )
 
         self.head = Head(
             vocab_size=vocab_size,

@@ -276,6 +276,7 @@ class TokenizedBlackboardDataset(GeneratedDataset):
             generation_spec=generation_spec,
             split=split,
             seed=seed,
+            disallow_op_permutations=self.bb_spec.operation.get_name() == 'subtraction'
         )
 
     def __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL) -> tuple[list[dict[str, torch.Tensor]], list[dict[str, torch.Tensor] | int]]:
@@ -291,9 +292,6 @@ class TokenizedBlackboardDataset(GeneratedDataset):
 
         for a, b in tqdm(input_operands, desc="Generating data"):
             # size is interpreted as the number of blackboard computation chains to generate
-            if(self.bb_spec.operation.get_name() == 'subtraction') and a < b:
-                a, b = b, a
-
             input_states, output_states = self._generate_blackboard_pairs(a, b, split != Split.EVAL)
             inputs += input_states
             labels += output_states
