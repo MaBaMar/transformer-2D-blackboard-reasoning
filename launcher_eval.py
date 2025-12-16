@@ -6,10 +6,11 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 NAME = "Evaluation_test"
-MODE = "euler"      # "local", "euler"
+MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
+BATCH_SIZE = 64
 NUM_SEEDS = 1
 
 applicable_configs = {
@@ -42,6 +43,7 @@ def main(args):
                     "task": model["task"],
                     "digits": digits,
                     "size": EVAL_SIZE,
+                    "batch_size": BATCH_SIZE,
                     "seed": seed,
                     "logging": LOGGING,
                 }

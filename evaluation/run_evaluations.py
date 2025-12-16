@@ -58,7 +58,15 @@ def setup_model(model_path, digits: int, task: str, device=-1):
         raise NotImplementedError("Implement scratchpads!")
 
     elif task == "blackboard-1d":
-        raise NotImplementedError("Implement blackboard-1d!")
+        tok = BBVocabTokenizer()
+        model = EOgar.load_from_path(model_path)
+
+        # TODO make this parameters of the evaluation maybe, or define it in a central location
+        bb_spec = BlackboardSpec(5, 10, False, Addition())
+
+        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
+
+        return reasoner, tok
 
     elif task == "blackboard-2d":
         tok = BBVocabTokenizer()
@@ -131,6 +139,8 @@ def load_dataset(task: str, size: int, digits: int, seed: int, batch_size: int =
 
 def ask(input, task, pipe, tok):
     if task == "basic":
+        raise NotImplementedError("Implement basic!")
+
         prompt = (f"Compute the sum. Answer with just the integer. \n Q: {input} = ? A:"    )
         out = pipe(prompt, max_new_tokens=30 ,do_sample=False,
                     truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
@@ -142,6 +152,8 @@ def ask(input, task, pipe, tok):
             return None
         
     elif task == "scratch_pad":
+        raise NotImplementedError("Implement scratch_pad!")
+    
         prompt = (f"You are a calculator. Show your work between <scratch> and </scratch>. Then output a single line: \"Result: <number>\" and stop. Your Task including an Example: {input}")
         out = pipe(prompt, max_new_tokens=200 ,do_sample=False,
                     truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
@@ -153,13 +165,9 @@ def ask(input, task, pipe, tok):
             return None
         pred = int(raw.replace(" ", ""))
 
-    elif task == "blackboard-1d":
-        raise NotImplementedError("Implement blackboard-1d!")
-
-    elif task == "blackboard-2d":
-        # TODO extend to larger batch sizes
-        out = pipe.compute_from_single_blackboard(input[0][0])
-        pred = out
+    elif task == "blackboard-2d" or task == "blackboard-1d":
+        out = pipe.compute_from_databatch(input)
+        pred = chainlist_to_results(out)
 
     else:
         raise TypeError("Unsupported task!")
@@ -170,26 +178,19 @@ def ask(input, task, pipe, tok):
 
 def check_prediction(prediction, label, task) -> int:
     if task == "basic":
+        raise NotImplementedError("Implement basic!")
         result_true = int(label[0])
 
     elif task == "scratch_pad":
+        raise NotImplementedError("Implement scratch_pad!")
         result_true = extract_label_number(label[0])
 
-    elif task == "blackboard-1d":
-        raise NotImplementedError("Implement blackboard-1d!")
-
-    elif task == "blackboard-2d":
-        prediction = prediction.result
-        result_true = label
+    elif task == "blackboard-2d" or task == "blackboard-1d":
+        return (prediction == label).float().mean()
 
     else:
         raise TypeError("Unsupported task!")
 
-    if result_true == prediction:
-        return 1
-
-    return 0
-    
 
 
 def extract_label_number(label: str) -> int | None:
@@ -218,6 +219,7 @@ def experiment(
         model_path: str,
         task: str,
         size: int,
+        batch_size: int,
         digits: int,
         seed: int,
         logging: str = "local",
@@ -231,6 +233,7 @@ def experiment(
             "model": model_name,
             "task": task,
             "size": size,
+            "batch_size": batch_size,
             "digits": digits,
             "seed": seed,
         },
@@ -250,7 +253,7 @@ def experiment(
 
     pipe, tok = setup_model(model_path, digits, task, device)
 
-    dataloader = load_dataset(task, size, digits, seed)
+    dataloader = load_dataset(task, size, digits, seed, batch_size)
 
     #
     #   Evaluate the performance on the dataset
@@ -289,6 +292,7 @@ def main(args):
         task=args.task,
         digits=args.digits,
         size=args.size,
+        batch_size=args.batch_size,
         seed=args.seed,
         logging=args.logging,
     )
@@ -303,6 +307,7 @@ if __name__ == "__main__":
     parser.add_argument("--task", type=str)
     parser.add_argument("--digits", type=int)
     parser.add_argument("--size", type=int)
+    parser.add_argument("--batch_size", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     args, _ = parser.parse_known_args()
