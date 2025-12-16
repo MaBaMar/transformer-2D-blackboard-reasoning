@@ -28,27 +28,35 @@ applicable_configs = {
         # 2D-RoPE
         { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_e1_s64_d3.pt", "task": "blackboard-2d" },
     ],
+    "bb_specs": [
+        { "height": 5, "width": 10, "randomize_position": False, "operation": "addition" },
+    ],
     "digits": [3, 5],
 }
 
 def main(args):
     command_list = []
     for model in applicable_configs["models"]:
-        for digits in applicable_configs["digits"]:
-            for seed in applicable_configs["seed"]:
-                flags = {
-                    "name": NAME,
-                    "model_name": model["name"],
-                    "model_path": model["path"],
-                    "task": model["task"],
-                    "digits": digits,
-                    "size": EVAL_SIZE,
-                    "batch_size": BATCH_SIZE,
-                    "seed": seed,
-                    "logging": LOGGING,
-                }
-                cmd = generate_base_command(experiment, flags=flags)
-                command_list.append(cmd)
+        for bb_spec in applicable_configs["bb_specs"]:
+            for digits in applicable_configs["digits"]:
+                for seed in applicable_configs["seed"]:
+                    flags = {
+                        "name": NAME,
+                        "model_name": model["name"],
+                        "model_path": model["path"],
+                        "task": model["task"],
+                        "digits": digits,
+                        "size": EVAL_SIZE,
+                        "batch_size": BATCH_SIZE,
+                        "height": bb_spec["height"],
+                        "width": bb_spec["width"],
+                        "randomize_position": bb_spec["randomize_position"],
+                        "operation": bb_spec["operation"],
+                        "seed": seed,
+                        "logging": LOGGING,
+                    }
+                    cmd = generate_base_command(experiment, flags=flags)
+                    command_list.append(cmd)
 
     generate_run_commands(
         command_list,

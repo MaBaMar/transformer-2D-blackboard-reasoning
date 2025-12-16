@@ -29,7 +29,7 @@ MODEL_PATHS = {
 #
 
 
-def setup_model(model_path, digits: int, task: str, device=-1):
+def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, device=-1):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if task == "basic":
@@ -61,9 +61,6 @@ def setup_model(model_path, digits: int, task: str, device=-1):
         tok = BBVocabTokenizer()
         model = EOgar.load_from_path(model_path)
 
-        # TODO make this parameters of the evaluation maybe, or define it in a central location
-        bb_spec = BlackboardSpec(5, 10, False, Addition())
-
         reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
 
         return reasoner, tok
@@ -71,9 +68,6 @@ def setup_model(model_path, digits: int, task: str, device=-1):
     elif task == "blackboard-2d":
         tok = BBVocabTokenizer()
         model = EOgar.load_from_path(model_path)
-
-        # TODO make this parameters of the evaluation maybe, or define it in a central location
-        bb_spec = BlackboardSpec(5, 10, False, Addition())
 
         reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
 
@@ -84,7 +78,7 @@ def setup_model(model_path, digits: int, task: str, device=-1):
 
 
 
-def load_dataset(task: str, size: int, digits: int, seed: int, batch_size: int = 1) -> DataLoader:
+def load_dataset(task: str, size: int, digits: int, bb_spec: BlackboardSpec, seed: int, batch_size: int = 1) -> DataLoader:
     spec = GenerationSpec(
         low=10**(digits - 1),
         high=10**(digits),
@@ -110,9 +104,6 @@ def load_dataset(task: str, size: int, digits: int, seed: int, batch_size: int =
         return DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     elif task == "blackboard-1d" or task == "blackboard-2d":
-        # TODO make this parameters of launcher
-        bb_spec = BlackboardSpec(5, 10, False, Addition())
-
         dataset = TokenizedBlackboardDataset(
             split=Split.EVAL,
             seed=seed,
@@ -221,6 +212,7 @@ def experiment(
         size: int,
         batch_size: int,
         digits: int,
+        bb_spec: BlackboardSpec,
         seed: int,
         logging: str = "local",
     ):
@@ -234,6 +226,12 @@ def experiment(
             "task": task,
             "size": size,
             "batch_size": batch_size,
+            "bb_spec": { 
+                "height": bb_spec.height, 
+                "width": bb_spec.width, 
+                "randomize_position": bb_spec.randomize_position, 
+                "operation": bb_spec.operation, 
+            },
             "digits": digits,
             "seed": seed,
         },
@@ -251,9 +249,22 @@ def experiment(
 
     print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
 
-    pipe, tok = setup_model(model_path, digits, task, device)
+    pipe, tok = setup_model(
+        model_path=model_path, 
+        digits=digits, 
+        bb_spec=bb_spec, 
+        task=task, 
+        device=device
+    )
 
-    dataloader = load_dataset(task, size, digits, seed, batch_size)
+    dataloader = load_dataset(
+        task=task, 
+        size=size, 
+        digits=digits, 
+        bb_spec=bb_spec, 
+        seed=seed, 
+        batch_size=batch_size
+    )
 
     #
     #   Evaluate the performance on the dataset
@@ -285,6 +296,8 @@ def experiment(
     
 
 def main(args):
+    bb_op = Addition() if args.operation == "addition" else None
+
     experiment(
         name=args.name,
         model_name=args.model_name,
@@ -293,6 +306,7 @@ def main(args):
         digits=args.digits,
         size=args.size,
         batch_size=args.batch_size,
+        bb_spec=BlackboardSpec(args.height, args.width, args.randomize_position, bb_op),
         seed=args.seed,
         logging=args.logging,
     )
@@ -308,6 +322,10 @@ if __name__ == "__main__":
     parser.add_argument("--digits", type=int)
     parser.add_argument("--size", type=int)
     parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--height", type=int)
+    parser.add_argument("--width", type=int)
+    parser.add_argument("--randomize_position", type=bool)
+    parser.add_argument("--operation", type=str)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     args, _ = parser.parse_known_args()
