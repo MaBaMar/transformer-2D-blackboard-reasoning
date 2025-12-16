@@ -217,7 +217,7 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_e{epochs}_s{train_size}_d{digits}_s{seed}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt")
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
@@ -230,6 +230,7 @@ def train(
             "epochs": epochs,
             "train_size": train_size,
             "digits": digits,
+            "seed": seed,
         }
     }, save_path)
 

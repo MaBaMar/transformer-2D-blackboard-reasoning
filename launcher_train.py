@@ -18,7 +18,7 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [3, 4, 5, 6, 8, 10],
+    "digits": [2, 4, 8],
     "train_sizes": [2048],
     "test_sizes": [256],
     "batch_size": [64],
