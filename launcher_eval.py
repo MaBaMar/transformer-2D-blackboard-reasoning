@@ -5,13 +5,13 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Evaluation_test"
+NAME = "Evaluation"
 MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
 BATCH_SIZE = 64
-NUM_SEEDS = 1
+NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
