@@ -140,6 +140,7 @@ def train(
         num_heads_encoder=num_heads_encoder,
         n_encoder_blocks=n_encoder_blocks,
         pad_id=pad_id,
+        rope_mode=rope_mode,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
