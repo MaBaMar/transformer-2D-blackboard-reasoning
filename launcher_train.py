@@ -5,7 +5,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Training_EOgar_test"
+NAME = "Training_EOgar"
 MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
