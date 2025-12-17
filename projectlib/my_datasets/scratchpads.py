@@ -86,6 +86,7 @@ class ScratchpadDataset(GeneratedDataset):
             regenerate=regenerate,
             generation_spec=generation_spec,
             seed=seed,
+            disallow_op_permutations=self.operand == "-"
         )
 
     @override
@@ -102,9 +103,6 @@ class ScratchpadDataset(GeneratedDataset):
             case Split.TRAIN: numbers = self.train_nums
 
         for a, b in numbers:
-            if(self.operand == "-") and a < b:
-                a, b = b, a
-
             target_scratchpad = self._generate_scratchpad(a, b)
 
             inputs.append(f"{num_to_str(a)} {self.operand} {num_to_str(b)}")

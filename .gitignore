@@ -209,6 +209,9 @@ __marimo__/
 # Ignore the datasets
 datasets/*
 
+# Ignore the models
+models/*.pt
+
 # Ignore wandb local runs
 wandb/
 
@@ -221,5 +224,5 @@ checkpoints/
 # Ignore datacache for testscripts
 testscripts/.datacache/*
 
-# Ignore the models
-models/
+# Ignore slurm output files
+slurm-*.out

@@ -86,7 +86,7 @@ class RoPECache(nn.Module):
         t = torch.arange(max_position, device=device, dtype=self.inv_freq.dtype)  # [max_position]
         # couldn't get rid of type problems here
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # [max_position, head_dim/2]
-        emb = torch.cat([freqs, freqs], dim=-1)            # [max_position, head_dim]
+        emb = torch.repeat_interleave(freqs, 2, dim=-1)  # [max_position, head_dim]
 
         cos = emb.cos()[None, None, :, :].to(dtype)        # [1,1,max_position,head_dim]
         sin = emb.sin()[None, None, :, :].to(dtype)
@@ -508,7 +508,7 @@ class CausalTransformer2DTPE(nn.Module):
         targets: [B,L] or None
         """
 
-        x = self.tok_emb(input_ids) * math.sqrt(self.d_model)
+        x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.drop(x)
 
         for layer in self.layers:

@@ -1,4 +1,4 @@
-# minimal training script for Edgar model
+# minimal training script for EOgar model
 import argparse
 import os
 import torch
@@ -11,7 +11,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.models.edgar import Edgar
+from src.models.eogar import EOgar
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 
@@ -21,22 +21,31 @@ MODELS_PATH = "./models/"
 
 
 
-def compute_accuracy(logits, labels, pad_id=None):
+def compute_accuracy(logits, labels):
     labels = labels[0]
     preds = logits.argmax(dim=-1)
 
+    if labels.shape != preds.shape:
+        return 0, 0
+    
+    output_wise = (preds == labels).all(dim=1).float().mean().item()
+
+    return output_wise
+
+
+def compute_accuracy_pt(logits, labels):
+    labels = labels[0]
+    preds = logits.argmax(dim=-1)
+
+    if labels.shape != preds.shape:
+        return 0, 0
+    
     labels = labels.reshape(-1)
     preds = preds.reshape(-1)
 
-    if labels.shape != preds.shape:
-        return 0
+    token_wise = (preds == labels).float().mean().item()
 
-    if pad_id is not None:
-        mask = (labels != pad_id).float()
-        correct = (preds == labels).float() * mask
-        return correct.sum().item() / mask.sum().item()
-    else:
-        return (preds == labels).float().mean().item()
+    return token_wise
 
 
 
@@ -50,9 +59,8 @@ def train(
         batch_size: int,
         model_dimension: int,
         num_heads_encoder: int,
-        num_heads_decoder: int,
         n_encoder_blocks: int,
-        n_decoder_blocks: int,
+        rope_mode: str,
         learning_rate: float,
         epochs: int,
         seed: int,
@@ -72,9 +80,8 @@ def train(
             "batch_size": batch_size,
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
-            "num_heads_decoder": num_heads_decoder,
             "n_encoder_blocks": n_encoder_blocks,
-            "n_decoder_blocks": n_decoder_blocks,
+            "rope_mode": rope_mode,
             "learning_rate": learning_rate,
             "epochs": epochs,
             "seed": seed,
@@ -118,7 +125,7 @@ def train(
         shuffle=True,
         collate_fn=collate_fn
     )
-    eval_loader = DataLoader(
+    test_loader = DataLoader(
         bb_dataset_test,
         batch_size=batch_size,
         shuffle=True,
@@ -127,15 +134,13 @@ def train(
 
     print("Data loaded.")
 
-    model = Edgar(
+    model = EOgar(
         vocab_size=vocab_size,
         d_model=model_dimension,
         num_heads_encoder=num_heads_encoder,
-        num_heads_decoder=num_heads_decoder,
         n_encoder_blocks=n_encoder_blocks,
-        n_decoder_blocks=n_decoder_blocks,
         pad_id=pad_id,
-        eos_id=bb_dataset_train.bb_2D_tokenizer.eos_id,
+        rope_mode=rope_mode,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
@@ -150,6 +155,7 @@ def train(
         model.train()
 
         train_acc = 0.0
+        train_acc_pt = 0.0
         train_loss = 0.0
 
         for step, (x_batch, y_batch) in enumerate(train_loader):
@@ -167,35 +173,42 @@ def train(
                 "loss": loss.item(),
             })
 
-            train_acc += compute_accuracy(logits, y_batch, pad_id)
+            train_acc += compute_accuracy(logits, y_batch)
+            train_acc_pt += compute_accuracy_pt(logits, y_batch)
             train_loss += loss.item()
 
         train_acc /= len(train_loader)
+        train_acc_pt /= len(train_loader)
         train_loss /= len(train_loader)
 
         #   Compute performance on evaluation set
 
         model.eval()
 
-        eval_acc = 0.0
-        eval_loss = 0.0
+        test_acc = 0.0
+        test_acc_pt = 0.0
+        test_loss = 0.0
 
         with torch.no_grad():
-            for x_batch, y_batch in eval_loader:
+            for x_batch, y_batch in test_loader:
                 logits, loss = model(x_batch, y_batch)
 
-                eval_acc += compute_accuracy(logits, y_batch, pad_id)
-                eval_loss += loss.item()
+                test_acc += compute_accuracy(logits, y_batch)
+                test_acc_pt += compute_accuracy_pt(logits, y_batch)
+                test_loss += loss.item()
 
-        eval_acc /= len(eval_loader)
-        eval_loss /= len(eval_loader)
+        test_acc /= len(test_loader)
+        test_acc_pt /= len(test_loader)
+        test_loss /= len(test_loader)
 
         wandb.log({
             "epoch": epoch,
             "train_acc": train_acc,
+            "train_acc_pt": train_acc_pt,
             "train_loss": train_loss,
-            "eval_acc": eval_acc,
-            "eval_loss": eval_loss,
+            "test_acc": test_acc,
+            "test_acc_pt": test_acc_pt,
+            "test_loss": test_loss,
         })
 
     wandb.finish()
@@ -205,16 +218,20 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_e{epochs}_s{train_size}_d{digits}_md{model_dimension}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt")
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
             "vocab_size": vocab_size,
             "d_model": model_dimension,
-            "num_heads_encoder": 4,
-            "num_heads_decoder": 4,
-            "n_encoder_blocks": 2,
-            "n_decoder_blocks": 2,
+            "num_heads_encoder": num_heads_encoder,
+            "n_encoder_blocks": n_encoder_blocks,
+            "pad_id": pad_id,
+            "rope_mode": rope_mode,
+            "epochs": epochs,
+            "train_size": train_size,
+            "digits": digits,
+            "seed": seed,
         }
     }, save_path)
 
@@ -233,9 +250,8 @@ def main(args):
         batch_size=args.batch_size,
         model_dimension=args.model_dimension,
         num_heads_encoder=args.num_heads_encoder,
-        num_heads_decoder=args.num_heads_decoder,
         n_encoder_blocks=args.n_encoder_blocks,
-        n_decoder_blocks=args.n_decoder_blocks,
+        rope_mode=args.rope_mode,
         learning_rate=args.learning_rate,
         epochs=args.epochs,
         seed=args.seed,
@@ -258,9 +274,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--num_heads_encoder", type=int)
-    parser.add_argument("--num_heads_decoder", type=int)
     parser.add_argument("--n_encoder_blocks", type=int)
-    parser.add_argument("--n_decoder_blocks", type=int)
+    parser.add_argument("--rope_mode", type=str)
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--seed", type=int, default=0)

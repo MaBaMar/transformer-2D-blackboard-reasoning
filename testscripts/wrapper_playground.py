@@ -6,68 +6,102 @@
 # ------------------------------------------------------------
 import torch
 import logging
+from tqdm import tqdm
 
-from src.models.edgar import Edgar
+from src.models.eogar import EOgar
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results, BBChain
 from projectlib.my_datasets.base import Split
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, BlackboardSpec, Addition
-from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
+from projectlib.my_datasets.collators import collate_bb_state_state, collate_bb_state_int, make_collator_with_args
 
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-MODEL_NAME = "model_new.pth"
+MODEL_NAME = "larger_test.pth"
 
 def check(train = False):
 
     spec = GenerationSpec(
-        train_size = 5000,
+        train_size = 20000,
         test_size = 5000,
         eval_size = 5000,
-        low = 200,
-        high = 400
+        low = 10,
+        high = 10000
     )
 
     bb_spec = BlackboardSpec(5, 10, False, Addition())
 
     bb_dataset = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec, split=Split.TRAIN)
+    bb_dataset_eval = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec, split=Split.EVAL)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     B = 64
     vocab_size = bb_dataset.bb_2D_tokenizer.vocab_size
     d_model = 64
 
-    collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=bb_dataset.bb_2D_tokenizer.pad_id, device=device)
-    data_loader = DataLoader(bb_dataset, batch_size=B, shuffle=False, collate_fn=collate_fn)
+    collate_fn_train = make_collator_with_args(collate_bb_state_state, pad_token_id=bb_dataset.bb_2D_tokenizer.pad_id, device=device)
+    data_loader_train = DataLoader(bb_dataset, batch_size=B, shuffle=True, collate_fn=collate_fn_train)
+
+    collate_fn_eval = make_collator_with_args(collate_bb_state_int, pad_token_id=bb_dataset.bb_2D_tokenizer.pad_id, device=device)
+    data_loader_eval = DataLoader(bb_dataset_eval, batch_size=B, shuffle=False, collate_fn=collate_fn_eval)
 
     print("Data loaded")
 
-    model = Edgar(
+    model = EOgar(
         vocab_size=vocab_size,
         d_model=d_model,
         num_heads_encoder=8,
-        num_heads_decoder=8,
-        n_encoder_blocks=4,
-        n_decoder_blocks=4,
+        n_encoder_blocks=12,
         pad_id=bb_dataset.bb_2D_tokenizer.pad_id
     ).to(device)
 
+    # model.load_state_dict(torch.load("model_new.pth"))
     print("Model initialized")
 
     if(train):
-        optimizer = AdamW(model.parameters(), lr=0.5e-3)
+        epochs = 15
+        optimizer = AdamW(model.parameters(), lr=1e-3)
+        total_steps = len(data_loader_train) * epochs
+        scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=0)
+
         model.train()
-        for epoch in range(2):
-            for step, (x_batch, y_batch) in enumerate(data_loader):
+
+        for epoch in range(epochs):
+            progress_bar = tqdm(data_loader_train, desc=f"Epoch {epoch+1}/{epochs}", unit="batch")
+
+            for step, (x_batch, y_batch) in enumerate(progress_bar):
+                # Optional: Move data to device if not done inside loader
+                # x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+
                 optimizer.zero_grad()
 
                 logits, loss = model(x_batch, y_batch)
 
-                # Backward pass
                 loss.backward()
                 optimizer.step()
 
-                print(f"Epoch {epoch}, Step {step}, Loss: {loss.item()}")
+                scheduler.step()
+
+                current_lr = scheduler.get_last_lr()[0]
+
+                # Update the progress bar with current metrics
+                # This replaces the print statement
+                progress_bar.set_postfix({
+                    "loss": f"{loss.item():.4f}",
+                    "lr": f"{current_lr:.6f}"
+                })
+            if epoch % 5 == 0:
+                torch.save(model.state_dict(), f"model_epoch_{epoch}.pth")
+                acc = 0
+                reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
+                for i, [x, y] in enumerate(data_loader_eval):
+                    chainlist = reasoner.compute_from_databatch(x)
+                    # print(chainlist_to_results(chainlist))
+                    acc += (chainlist_to_results(chainlist).to(device) == y).sum().item()
+                acc /= len(data_loader_eval)
+
+                print(f"Accuracy: {acc:.4f}")
 
         torch.save(model.state_dict(), MODEL_NAME)
     else:
@@ -75,7 +109,16 @@ def check(train = False):
 
     reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
 
-    print("Model loaded")
+    acc = 0
+    for i, [x, y] in enumerate(data_loader_eval):
+        chainlist = reasoner.compute_from_databatch(x)
+        # print(chainlist_to_results(chainlist))
+        acc += (chainlist_to_results(chainlist).to(device) == y).sum().item()
+    acc /= len(data_loader_eval)
+
+    print(f"Accuracy: {acc:.4f}")
+
+    # print("Model loaded")
     # st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
     # st.show_steps()
 
@@ -88,9 +131,10 @@ def check(train = False):
     # st.show_steps()
     # print("Result is: ", st.result)
 
-    st = reasoner.compute_from_operands(241, 389)
-    st.show_steps()
-    print("Result is: ", st.result)
+    # st = reasoner.compute_from_operands(241, 389)
+    # st.show_steps()
+    # print("Result is: ", st.result)
+
 
     # st = reasoner.compute_from_operands(150, 280)
     # st.show_steps()
@@ -108,6 +152,6 @@ def check(train = False):
 if __name__ == "__main__":
 
     logging.basicConfig()
-    logging.getLogger().setLevel(logging.DEBUG)
+    # logging.getLogger().setLevel(logging.DEBUG)
 
     check(True)

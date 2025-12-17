@@ -1,48 +1,82 @@
 import argparse
 
-from evaluation import experiment
+from evaluation import run_evaluations as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Baselines"
+NAME = "Evaluation"
 MODE = "local"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
+EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
+BATCH_SIZE = 64
+NUM_SEEDS = 10
+
 applicable_configs = {
-    "seed": [i for i in range(1)],
+    "seed": [i for i in range(NUM_SEEDS)],
     "models": [
-        #"Llama-13B",
-        "Llama-8B",
-        #"Llama-1B",
+        # Base
+        # { "name": "todo", "path": "todo", "task": "basic" },
+
+        # Scratchpad
+        # { "name": "todo", "path": "todo", "task": "scratchpad" },
+
+        # 1D-RoPE
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-1d_d2_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-1d_d4_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-1d_d8_s{seed:d}.pt", "task": "blackboard-1d" },
+
+        { "name": "EOgar-400K", "path": "models/EOgar-400K-1d_d2_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-400K", "path": "models/EOgar-400K-1d_d4_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-400K", "path": "models/EOgar-400K-1d_d8_s{seed:d}.pt", "task": "blackboard-1d" },
+
+        { "name": "EOgar-800K", "path": "models/EOgar-800K-1d_d2_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-800K", "path": "models/EOgar-800K-1d_d4_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-800K", "path": "models/EOgar-800K-1d_d8_s{seed:d}.pt", "task": "blackboard-1d" },
+
+        # 2D-RoPE
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_d2_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_d4_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
+
+        { "name": "EOgar-400K", "path": "models/EOgar-400K-2d_d2_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-400K", "path": "models/EOgar-400K-2d_d4_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-400K", "path": "models/EOgar-400K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
+
+        { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d2_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d4_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
     ],
-    "task": [
-        "basic",
-        #"scratchpad",
-        #"blackboard",
+    "bb_specs": [
+        { "height": 5, "width": 10, "randomize_position": False, "operation": "addition" },
     ],
-    "digits": [1],
-    "sizes": [1024],
+    "digits": [2, 6, 8],
 }
 
 def main(args):
     command_list = []
     for model in applicable_configs["models"]:
-        for task in applicable_configs["task"]:
+        for bb_spec in applicable_configs["bb_specs"]:
             for digits in applicable_configs["digits"]:
-                for size in applicable_configs["sizes"]:
-                    for seed in applicable_configs["seed"]:
-                        flags = {
-                            "name": NAME,
-                            "model_name": model,
-                            "task": task,
-                            "digits": digits,
-                            "size": size,
-                            "seed": seed,
-                            "logging": LOGGING,
-                        }
-                        cmd = generate_base_command(experiment, flags=flags)
-                        command_list.append(cmd)
+                for seed in applicable_configs["seed"]:
+                    flags = {
+                        "name": NAME,
+                        "model_name": model["name"],
+                        "model_path": model["path"].format(seed=seed),
+                        "task": model["task"],
+                        "digits": digits,
+                        "size": EVAL_SIZE,
+                        "batch_size": BATCH_SIZE,
+                        "height": bb_spec["height"],
+                        "width": bb_spec["width"],
+                        "randomize_position": bb_spec["randomize_position"],
+                        "operation": bb_spec["operation"],
+                        "seed": seed,
+                        "logging": LOGGING,
+                    }
+                    cmd = generate_base_command(experiment, flags=flags)
+                    command_list.append(cmd)
 
     generate_run_commands(
         command_list,
