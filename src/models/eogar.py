@@ -112,7 +112,7 @@ class Encoder(nn.Module):
         ) -> torch.Tensor:
             # pre-norm + attention
             h = self.ln1(x)
-            h = self.attn(h, pos_row, pos_col, key_padding_mask)
+            h = self.attn(h, pos_row, pos_col, key_padding_mask=key_padding_mask)
             x = x + self.dropout(h)
 
             # pre-norm + FFN
