@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import random
 import math
+import sys
 
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
@@ -163,7 +164,11 @@ class GeneratedDataset(Dataset, ABC):
         else:
             total_samples = span * span
 
-        indices = random.sample(range(total_samples), spec.train_size + spec.test_size + spec.eval_size)
+        # we must ensure that the sample space is supportable
+        if(total_samples >= sys.maxsize):
+            indices = GeneratedDataset._slow_sample(total_samples, spec.train_size + spec.test_size + spec.eval_size)
+        else:
+            indices = random.sample(range(total_samples), spec.train_size + spec.test_size + spec.eval_size)
         values: list[tuple[int, int]] = []
 
         # convert indices to (i, j) pairs
@@ -183,3 +188,16 @@ class GeneratedDataset(Dataset, ABC):
 
         assert len(values) == len(set(values)), f"Duplicate values found: {values}"
         return values
+
+    @staticmethod
+    def _slow_sample(total_samples: int, sample_size: int) -> list[int]:
+        samples: set[int] = set([])
+
+        while len(samples) < sample_size:
+            sample = random.randint(0, total_samples - 1)
+            if sample not in samples:
+                samples.add(sample)
+
+        out: list[int] = list(samples)
+        random.shuffle(out)
+        return out
