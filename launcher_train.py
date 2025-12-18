@@ -18,7 +18,7 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [4, 8, 16],
+    "digits": [4, 8],
     "train_sizes": [8096],
     "test_sizes": [1024],
     "batch_size": [64],
@@ -30,12 +30,12 @@ applicable_configs = {
         # { "model_name": "EOgar-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
     ],
     "bb_specs": [
-        { "height": 16, "width": 32, "randomize_position": "False", "operation": "addition" },
-        { "height": 16, "width": 32, "randomize_position": "True", "operation": "addition" },
+        { "height": 8, "width": 16, "randomize_position": "false", "operation": "addition" },
+        { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
     ],
     "rope_mode": ["1d", "2d"],
     "learning_rate": [1e-3],
-    "epochs": [10],
+    "epochs": [6],
 }
 
 def main(args):
@@ -61,6 +61,7 @@ def main(args):
                                                 "bb_height": bb_spec["height"],
                                                 "bb_width": bb_spec["width"],
                                                 "bb_randomize_position": bb_spec["randomize_position"],
+                                                "operation": bb_spec["operation"],
                                                 "model_dimension": model_spec["model_dimension"],
                                                 "num_heads_encoder": model_spec["num_heads_encoder"],
                                                 "n_encoder_blocks": model_spec["n_encoder_blocks"],

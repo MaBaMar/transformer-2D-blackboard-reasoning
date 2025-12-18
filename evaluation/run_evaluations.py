@@ -296,7 +296,14 @@ def experiment(
     
 
 def main(args):
-    bb_op = Addition() if args.operation == "addition" else None
+    bb_op = None
+    match args.operation:
+        case "addition":
+            op = Addition()
+        case "subtraction":
+            op = Subtraction()
+        case _:
+            raise ValueError()
 
     experiment(
         name=args.name,
@@ -306,7 +313,7 @@ def main(args):
         digits=args.digits,
         size=args.size,
         batch_size=args.batch_size,
-        bb_spec=BlackboardSpec(args.height, args.width, args.randomize_position, bb_op),
+        bb_spec=BlackboardSpec(args.height, args.width, args.randomize_position=="true", bb_op),
         seed=args.seed,
         logging=args.logging,
     )
@@ -324,7 +331,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--height", type=int)
     parser.add_argument("--width", type=int)
-    parser.add_argument("--randomize_position", type=bool)
+    parser.add_argument("--randomize_position", type=str)
     parser.add_argument("--operation", type=str)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")

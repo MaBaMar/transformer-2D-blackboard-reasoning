@@ -49,7 +49,7 @@ applicable_configs = {
         { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
     ],
     "bb_specs": [
-        { "height": 5, "width": 10, "randomize_position": False, "operation": "addition" },
+        { "height": 5, "width": 10, "randomize_position": "false", "operation": "addition" },
     ],
     "digits": [2, 6, 8],
 }

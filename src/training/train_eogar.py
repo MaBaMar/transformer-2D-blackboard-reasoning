@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.models.eogar import EOgar
-from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition, Subtraction
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 
 
@@ -249,11 +249,20 @@ def train(
 
 
 def main(args):
+    op = None
+    match args.operation:
+        case "addition":
+            op = Addition()
+        case "subtraction":
+            op = Subtraction()
+        case _:
+            raise ValueError()
+
     bb_spec = BlackboardSpec(
         height=args.bb_height,
         width=args.bb_width,
-        randomize_position=args.bb_randomize_position,
-        operation= Addition(),
+        randomize_position=args.bb_randomize_position=="true",
+        operation=op,
     )
 
     train(
@@ -291,7 +300,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--bb_height", type=int)
     parser.add_argument("--bb_width", type=int)
-    parser.add_argument("--bb_randomize_position", type=bool)
+    parser.add_argument("--bb_randomize_position", type=str)
+    parser.add_argument("--operation", type=str)
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--num_heads_encoder", type=int)
     parser.add_argument("--n_encoder_blocks", type=int)

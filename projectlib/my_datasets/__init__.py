@@ -2,7 +2,7 @@
 from .base import GeneratedDataset, GenerationSpec, Split
 from .additions import AdditionDataset
 from .scratchpads import ScratchpadDataset
-from .blackboards import TokenizedBlackboardDataset, BBVocabTokenizer, BlackboardSpec, Addition
+from .blackboards import TokenizedBlackboardDataset, BBVocabTokenizer, BlackboardSpec, Addition, Subtraction
 
 __all__ = [
     "GeneratedDataset",
@@ -17,4 +17,5 @@ __all__ = [
     "BBVocabTokenizer",
     "BlackboardSpec",
     "Addition",
+    "Subtraction",
 ]
