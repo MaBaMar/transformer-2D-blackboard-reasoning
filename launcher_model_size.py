@@ -9,7 +9,7 @@ NAME = "Modelsize_EOgar"
 MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 1024
+EVAL_SIZE = 8192
 NUM_SEEDS = 10
 
 #
@@ -18,29 +18,41 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [5, 10],
-    "train_sizes": [2048],
-    "test_sizes": [256],
+    "digits": [4, 8, 12],
+    "train_sizes": [4096],
+    "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
         # Vary encoder blocks
-        { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-blocks-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        { "model_name": "EOgar-blocks-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
-        # { "model_name": "EOgar-blocks-6M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 128 },
-        # { "model_name": "EOgar-blocks-13M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 256 },
+        { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
+        
+        { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar-d64-h4-b16", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
 
         # Vary number of heads
-        { "model_name": "EOgar-heads-8-3M", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 64 },
-        { "model_name": "EOgar-heads-16-3M", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 64 },
+        { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d32-h16-b4", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d32-h32-b4", "model_dimension": 32, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d32-h64-b4", "model_dimension": 32, "num_heads_encoder": 64, "n_encoder_blocks": 4 },
+        
+        { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d64-h16-b4", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d64-h32-b4", "model_dimension": 64, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
 
-        # Vary model dimension
-        { "model_name": "EOgar-dim-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-dim-12M", "model_dimension": 128, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
+        # Vary both
+        { "model_name": "EOgar-d32-h8-b8", "model_dimension": 32, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar-d32-h16-b16", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
+
+        { "model_name": "EOgar-d64-h8-b8", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar-d64-h16-b16", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
     ],
-    "rope_mode": ["2d"], # ["1d", "2d"],
+    "rope_mode": ["2d"],
     "learning_rate": [1e-3],
-    "epochs": [10],
+    "epochs": [8],
 }
 
 def main(args):
@@ -90,6 +102,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-cpus", type=int, default=1)
     parser.add_argument("--num-gpus", type=int, default=0)
-    parser.add_argument("--num-hours", type=int, default=8)
+    parser.add_argument("--num-hours", type=int, default=23)
     args = parser.parse_args()
     main(args)

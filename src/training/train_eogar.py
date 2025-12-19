@@ -227,20 +227,28 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}_r{"T" if bb_spec.randomize_position else "F"}.pt")
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
-            "vocab_size": vocab_size,
-            "d_model": model_dimension,
-            "num_heads_encoder": num_heads_encoder,
-            "n_encoder_blocks": n_encoder_blocks,
-            "pad_id": pad_id,
-            "rope_mode": rope_mode,
-            "epochs": epochs,
             "train_size": train_size,
             "digits": digits,
+            "batch_size": batch_size,
+            "bb_spec": { 
+                "height": bb_spec.height, 
+                "width": bb_spec.width, 
+                "randomize_position": bb_spec.randomize_position, 
+                "operation": bb_spec.operation, 
+            },
+            "model_dimension": model_dimension,
+            "num_heads_encoder": num_heads_encoder,
+            "n_encoder_blocks": n_encoder_blocks,
+            "rope_mode": rope_mode,
+            "learning_rate": learning_rate,
+            "epochs": epochs,
             "seed": seed,
+            "vocab_size": vocab_size,
+            "pad_id": pad_id,
         }
     }, save_path)
 

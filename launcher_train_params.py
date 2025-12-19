@@ -5,7 +5,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Training_EOgar"
+NAME = "Training_params_EOgar"
 MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
@@ -18,23 +18,22 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [4, 8, 12],
-    "train_sizes": [8192],
+    "digits": [8],
+    "train_sizes": [2048, 4096, 8192],
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
         { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
         { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
         { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        # { "model_name": "EOgar-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
     ],
     "bb_specs": [
         { "height": 8, "width": 16, "randomize_position": "false", "operation": "addition" },
-        { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
+        # { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
     ],
-    "rope_mode": ["1d", "2d"],
+    "rope_mode": ["2d"],
     "learning_rate": [1e-3],
-    "epochs": [6],
+    "epochs": [6, 8, 10],
 }
 
 def main(args):
