@@ -3,7 +3,7 @@ import torch
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from typing import override, TypeAlias, Union, Optional
 
-from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split
+from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split, PaddingMode
 from projectlib.my_datasets._operands import OPERATION, Operation
 from projectlib.my_datasets.utils import num_to_str, get_digits, digits_to_str
 
@@ -65,6 +65,7 @@ class ScratchpadDataset(GeneratedDataset):
         seed: Optional[int] = None,
         regenerate: bool = True,
         operand: Operation = "+",
+        tokenizer_padding_mode: PaddingMode = "do_not_pad"
     ):
         self.operand = operand
 
@@ -86,7 +87,8 @@ class ScratchpadDataset(GeneratedDataset):
             regenerate=regenerate,
             generation_spec=generation_spec,
             seed=seed,
-            disallow_op_permutations=self.operand == "-"
+            disallow_op_permutations=self.operand == "-",
+            tokenizer_padding_mode=tokenizer_padding_mode
         )
 
     @override
