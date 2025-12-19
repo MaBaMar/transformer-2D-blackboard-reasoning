@@ -18,33 +18,10 @@
 
 from typing import Optional, final, Tuple, List
 import torch
-import math
 from torch import nn
-import torch.nn.functional as F
 
-from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
+from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention, FeedForward, OutputHead
 from projectlib.wrappertypes import BBChainGenerator
-
-
-class FeedForward(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        hidden_dim: int,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(d_model, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, d_model)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc1(x)
-        x = F.gelu(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
-
 
 @final  # affects typechecker only
 class Encoder(nn.Module):
@@ -81,7 +58,7 @@ class Encoder(nn.Module):
         targets: [B,L] or None
         """
 
-        x = self.tok_emb(input_ids)  # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
+        x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.dropout(x)
 
         for layer in self.transformer_blocks:
@@ -277,7 +254,7 @@ class EOgar(BBChainGenerator):
             num_blocks=n_encoder_blocks
         )
 
-        self.head = Head(
+        self.head = OutputHead(
             vocab_size=vocab_size,
             d_model=d_model,
             pad_id=pad_id,

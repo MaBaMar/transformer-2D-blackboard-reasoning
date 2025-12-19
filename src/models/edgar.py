@@ -15,27 +15,8 @@ import math
 from torch import nn
 import torch.nn.functional as F
 
-from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
+from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention, FeedForward
 from projectlib.wrappertypes import BBChainGenerator
-
-class FeedForward(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        hidden_dim: int,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(d_model, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, d_model)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc1(x)
-        x = F.gelu(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
 
 
 @final  # affects typechecker only
