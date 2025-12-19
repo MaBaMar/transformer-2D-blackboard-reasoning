@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.models.eogar import EOgar
-from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 
 
@@ -57,6 +57,7 @@ def train(
         eval_size: int,
         digits: int,
         batch_size: int,
+        bb_spec: BlackboardSpec,
         model_dimension: int,
         num_heads_encoder: int,
         n_encoder_blocks: int,
@@ -78,6 +79,12 @@ def train(
             "eval_size": eval_size,
             "digits": digits,
             "batch_size": batch_size,
+            "bb_spec": { 
+                "height": bb_spec.height, 
+                "width": bb_spec.width, 
+                "randomize_position": bb_spec.randomize_position, 
+                "operation": bb_spec.operation, 
+            },
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
             "n_encoder_blocks": n_encoder_blocks,
@@ -104,6 +111,7 @@ def train(
         split=Split.TRAIN,
         seed=seed,
         generation_spec=spec,
+        blackboard_spec=bb_spec,
     )
 
     bb_dataset_test = TokenizedBlackboardDataset(
@@ -111,6 +119,7 @@ def train(
         split=Split.TEST,
         seed=seed,
         generation_spec=spec,
+        blackboard_spec=bb_spec,
     )
 
     pad_id = bb_dataset_train.bb_2D_tokenizer.pad_id
@@ -240,6 +249,13 @@ def train(
 
 
 def main(args):
+    bb_spec = BlackboardSpec(
+        height=args.bb_height,
+        width=args.bb_width,
+        randomize_position=args.bb_randomize_position,
+        operation= Addition(),
+    )
+
     train(
         name=args.name,
         model_name=args.model_name,
@@ -248,6 +264,7 @@ def main(args):
         test_size=args.test_size,
         eval_size=args.eval_size,
         batch_size=args.batch_size,
+        bb_spec=bb_spec,
         model_dimension=args.model_dimension,
         num_heads_encoder=args.num_heads_encoder,
         n_encoder_blocks=args.n_encoder_blocks,
@@ -272,6 +289,9 @@ if __name__ == "__main__":
     parser.add_argument("--test_size", type=int)
     parser.add_argument("--eval_size", type=int)
     parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--bb_height", type=int)
+    parser.add_argument("--bb_width", type=int)
+    parser.add_argument("--bb_randomize_position", type=bool)
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--num_heads_encoder", type=int)
     parser.add_argument("--n_encoder_blocks", type=int)
