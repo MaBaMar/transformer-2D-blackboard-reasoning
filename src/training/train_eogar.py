@@ -91,7 +91,6 @@ def collect_error_samples(model, error_pool_set, collate_fn, num_errors, batch_s
             target_tokens = y_collated[0]
 
             if target_tokens.shape != preds.shape:
-                print("Shape mismatch between targets and predictions, skipping batch.")
                 continue
 
 
@@ -314,7 +313,7 @@ def train(
         test_acc /= len(test_loader)
         test_acc_pt /= len(test_loader)
         test_loss /= len(test_loader)
-        print(f"Epoch {epoch}: Train Acc: {train_acc:.4f}, Train Acc PT: {train_acc_pt:.4f}, Train Loss: {train_loss:.4f} | Test Acc: {test_acc:.4f}, Test Acc PT: {test_acc_pt:.4f}, Test Loss: {test_loss:.4f}")
+        #print(f"Epoch {epoch}: Train Acc: {train_acc:.4f}, Train Acc PT: {train_acc_pt:.4f}, Train Loss: {train_loss:.4f} | Test Acc: {test_acc:.4f}, Test Acc PT: {test_acc_pt:.4f}, Test Loss: {test_loss:.4f}")
         wandb.log({
             "epoch": epoch,
             "train_acc": train_acc,
