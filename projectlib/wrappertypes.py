@@ -14,7 +14,7 @@ import torch
 # ------------------------------------------------------------
 
 @final
-class BBEndOfChainException(Exception):
+class EndOfComputationException(Exception):
     """Raised when the end of the blackboard chain is reached."""
 
     def __init__(self, message: str = "End of blackboard chain reached"):
@@ -32,8 +32,6 @@ class BBChainGenerator(ABC, torch.nn.Module):
         x: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     ) -> torch.Tensor:
         """Takes a blackboard state and generates the next state in the sequence.
-
-        Throws BBEndOfChainException if the end of the chain is reached.
 
         Args:
             x (tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]): Input data (blackboard, pos_row, pos_col, padding_mask) (current blackboard state).
