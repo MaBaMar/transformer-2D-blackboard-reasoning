@@ -119,11 +119,10 @@ class ScratchpadDataset(GeneratedDataset):
         d_a = get_digits(a)
         d_b = get_digits(b)
 
-        assert len(d_a) == len(d_b), "Input numbers do not have the same amount of digits!"
-        n = len(d_a)
+        n = max(len(d_a), len(d_b))
 
         # Generate scratchpad line by line
-        scratchpad = f"{num_to_str(a)} {self.operand} {num_to_str(b)} , C: 0\n"
+        scratchpad = f"{num_to_str(a, n)} {self.operand} {num_to_str(b, n)} , C: 0\n"
 
         result = []
         prev_carry = 0
