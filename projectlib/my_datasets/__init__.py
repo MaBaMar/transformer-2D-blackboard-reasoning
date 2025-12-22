@@ -3,6 +3,7 @@ from .base import GeneratedDataset, GenerationSpec, Split
 from .additions import AdditionDataset
 from .scratchpads import ScratchpadDataset
 from .blackboards import TokenizedBlackboardDataset, BBVocabTokenizer, BlackboardSpec, Addition
+from .cot import CoTDataset
 
 __all__ = [
     "GeneratedDataset",
@@ -12,6 +13,8 @@ __all__ = [
     "AdditionDataset",
     
     "ScratchpadDataset",
+
+    "CoTDataset",
 
     "TokenizedBlackboardDataset",
     "BBVocabTokenizer",
