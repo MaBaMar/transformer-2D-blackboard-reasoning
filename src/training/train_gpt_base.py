@@ -52,7 +52,7 @@ def train(
     wandb.init(
         name=name,
         entity="blackboard-reasoning",
-        project="blackboard-reasoning",
+        project="blackboard-reasoning_gpt_baseline", # TODO change?
         config={
             "model": model_name,
             "dataset_variant": dataset_variant,
@@ -134,7 +134,7 @@ def train(
         train_all_token_acc = 0.0
         train_loss = 0.0
 
-        for step, data in enumerate(train_loader):
+        for step, data in enumerate(progress_bar):
             optimizer.zero_grad()
 
             tokenizer_out: dict[str, torch.Tensor] = tokenizer.encode_batch(data['input'], inference_mode=False)
@@ -163,8 +163,8 @@ def train(
                 "lr": current_lr
             })
 
-            train_per_token_acc += compute_accuracy(logits, y)
-            train_all_token_acc += compute_accuracy_pt(logits, y)
+            train_per_token_acc += compute_accuracy(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
+            train_all_token_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
             train_loss += loss.item()
 
         # Compute average metrics for the epoch
@@ -183,8 +183,8 @@ def train(
                 attention_mask = tokenizer_out['attention_mask'][..., :-1]
                 y = tokenizer_out['input_ids'][..., 1:]
                 logits, loss = model(x, attention_mask, y)
-                test_per_token_acc += compute_accuracy(logits, y)
-                test_all_token_acc += compute_accuracy_pt(logits, y)
+                test_per_token_acc += compute_accuracy(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
+                test_all_token_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
                 test_loss += loss.item()
 
         test_per_token_acc /= len(test_loader)
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_heads", type=int, required=True)
     parser.add_argument("--n_decoder_blocks", type=int, required=True)
     parser.add_argument("--learning_rate", type=float, required=True)
-    parser.add_argument("--warmup_steps", type=int, default=1000)
+    parser.add_argument("--warmup_steps", type=int, default=100)
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")

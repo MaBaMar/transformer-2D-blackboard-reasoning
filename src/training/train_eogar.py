@@ -139,6 +139,7 @@ def train(
 
         for step, (x_batch, y_batch) in enumerate(train_loader):
             optimizer.zero_grad()
+            y_batch = y_batch[0] # we only care about the first entry in the tuple
 
             logits, loss = model(x_batch, y_batch)
 
@@ -170,6 +171,7 @@ def train(
 
         with torch.no_grad():
             for x_batch, y_batch in test_loader:
+                y_batch = y_batch.to(device)
                 logits, loss = model(x_batch, y_batch)
 
                 test_acc += compute_accuracy(logits, y_batch)

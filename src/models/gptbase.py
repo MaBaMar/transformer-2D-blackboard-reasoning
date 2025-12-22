@@ -29,6 +29,8 @@ class GPTBaseTokenizer:
         self._tok_internal: PreTrainedTokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self._tok_internal.add_special_tokens({'pad_token': '<pad>', 'eos_token': '<eos>', 'sep_token': '<sep>'}, replace_additional_special_tokens=True)
         self._device = device
+        # vocab size of tokenizer fails to consider special tokens, so we need a custom solution
+        self.vocab_size: int = len(self._tok_internal)
 
     def get_token_config(self) -> dict[str, int]:
         pad_id = self._tok_internal.pad_token_id
@@ -66,10 +68,6 @@ class GPTBaseTokenizer:
             res.append(decoded)
         return res
 
-    @property
-    def vocab_size(self) -> int:
-        return self._tok_internal.vocab_size
-
 class GPTStyleBaseline(nn.Module):
     def __init__(
         self,
@@ -88,7 +86,7 @@ class GPTStyleBaseline(nn.Module):
         self.pos_emb = nn.Embedding(max_seq_len, d_model)    # additive positional embedding
 
         self.blocks = nn.ModuleList([
-            self._TransformerBlock(d_model, num_heads, dropout)
+            self._TransformerBlock(d_model, num_heads, dropout, max_seq_len)
             for _ in range(num_blocks)
         ])
 
@@ -103,20 +101,29 @@ class GPTStyleBaseline(nn.Module):
         self._max_inference_steps = max_inference_steps
         self.model_logger = getLogger(__name__)
 
+        # weight linking:
+        self.head.head.weight = self.tok_emb.weight
+
     def forward(self, x: torch.Tensor, attention_mask: torch.Tensor, y: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor | None]:
         assert x.ndim == 2, f"input must be 2D tensor, got {x.ndim}D"
         assert attention_mask.shape == x.shape, f"attention mask shape {attention_mask.shape} does not match input shape {x.shape}"
+
         L = x.shape[1]
+        assert L <= self.max_seq_len, f"sequence length {L} exceeds max_seq_len {self.max_seq_len}"
+
+        # patch attention mask in case of left padding
+        pos_ids = attention_mask.cumsum(dim=1) - 1
+        pos_ids = pos_ids.masked_fill(pos_ids == -1, 0)
 
         # embedding (+ some random embedding dropout)
-        x = self.tok_emb(x) + self.pos_emb(torch.arange(L, device=x.device).unsqueeze(0))
+        x = self.tok_emb(x) + self.pos_emb(pos_ids)
         x = self.embedding_dropout(x)
 
         # pass through transformer blocks
         for block in self.blocks:
-            x = block(x)
+            x = block(x=x, attention_mask=attention_mask)
 
-        logits, loss = self.head(context=x, targets=y)
+        logits, loss = self.head(context=x.contiguous(), targets=y.contiguous() if y is not None else None)
         return logits, loss
 
     # -----------------------------------------
@@ -128,6 +135,7 @@ class GPTStyleBaseline(nn.Module):
             d_model: int,
             num_heads: int,
             dropout: float,
+            maxlen: int
         ):
             super().__init__()
             assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
@@ -137,21 +145,23 @@ class GPTStyleBaseline(nn.Module):
             self.dropout = nn.Dropout(dropout)
             self.attn: nn.MultiheadAttention = nn.MultiheadAttention(d_model, num_heads, dropout=dropout, batch_first=True)
             self.ffn = FeedForward(d_model, 4 * d_model, dropout)
+            self.register_buffer('causal_buffer', torch.triu(
+                torch.ones((maxlen, maxlen), dtype=torch.bool),
+                diagonal=1
+            ))
 
         def forward(
             self,
             x: torch.Tensor,
+            attention_mask: torch.Tensor
         ):
             L = x.shape[1]
 
             h = self.ln1(x)
 
             # do masked multihead attention:
-            causal_mask = torch.triu(
-                torch.ones((L, L), device=x.device, dtype=torch.bool),
-                diagonal=1
-            )
-            h, _ = self.attn(h, h, h, attn_mask=causal_mask, need_weights=False)
+            causal_mask = self.causal_buffer[:L, :L]
+            h, _ = self.attn(h, h, h, attn_mask=causal_mask, key_padding_mask=(attention_mask==0), need_weights=False)
             x = x + self.dropout(h)
 
             h2 = self.ln2(x)
@@ -173,7 +183,7 @@ class GPTStyleBaseline(nn.Module):
         self._max_inference_steps = steps
 
     @torch.inference_mode()
-    def batch_inference(self, x: torch.Tensor) -> torch.Tensor:
+    def batch_inference(self, x: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
         Perform batch inference on the model. Supports variable-length sequences.
 
@@ -193,7 +203,8 @@ class GPTStyleBaseline(nn.Module):
         x_new: torch.Tensor = x.clone() # Note: this may be replaced with reference copying, if we do not need to be careful with reference semantics here
 
         while is_active.any():
-            next_tokens = self.forward(x_new[is_active])[0].argmax(dim=1) # greedily select the next token
+            logits, _ = self.forward(x_new[is_active], attention_mask[is_active])
+            next_tokens = logits[:, -1, :].argmax(dim=-1) # greedily select the next token
             is_active[is_active][~self._find_and_append_inplace(x_new[is_active], next_tokens)] = False
 
         # for debugging, check if all sequences are finished
