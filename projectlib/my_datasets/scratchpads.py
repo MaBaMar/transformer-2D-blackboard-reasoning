@@ -97,6 +97,7 @@ class ScratchpadDataset(GeneratedDataset):
 
         inputs = []
         labels = []
+        scratchpads = []
 
         numbers = []
         match split:
@@ -105,12 +106,14 @@ class ScratchpadDataset(GeneratedDataset):
             case Split.TRAIN: numbers = self.train_nums
 
         for a, b in numbers:
-            target_scratchpad = self._generate_scratchpad(a, b)
+            inputs.append(f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)}")
+            labels.append(f"{OPERATION[self.operand](a, b)}")
+            scratchpads.append(self._generate_scratchpad(a, b))
 
-            inputs.append(f"{num_to_str(a)} {self.operand} {num_to_str(b)}")
-            labels.append(target_scratchpad)
-
-        return inputs, labels
+        if split == Split.EVAL:
+            return inputs, labels
+        else:
+            return scratchpads, labels
 
 
     def _generate_scratchpad(self, a: int, b: int) -> str:
