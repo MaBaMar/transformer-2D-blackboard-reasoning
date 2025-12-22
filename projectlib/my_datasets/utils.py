@@ -1,14 +1,22 @@
-def get_digits(num: int) -> list[int]:
+def get_digits(num: int, length: int = None) -> list[int]:
     """
     Get digits of a number
 
     Args:
         num (int): Number to convert.
+        length (int, optional): Length to pad to.
 
     Returns:
         out (list[int]): A list of digits.
     """
-    return [int(n) for n in str(num)]
+    digits = [int(n) for n in str(num)]
+
+    if length is None:
+        padding = []
+    else:
+        padding = [0] * max(0, length - len(digits))
+
+    return padding + digits
 
 
 def get_number(digits: list[int]) -> int:
@@ -31,6 +39,7 @@ def num_to_str(num: int, length: int = None) -> str:
 
     Args:
         num (int): The number to convert.
+        length (int, optional): Length to pad to.
 
     Returns:
         out (str): The number as a space-separated string, e.g., 123 -> '1 2 3'.
@@ -50,6 +59,7 @@ def digits_to_str(digits: list[int], length: int = None) -> str:
 
     Args:
         digits (list[int]): List of digits to convert.
+        length (int, optional): Length to pad to.
 
     Returns:
         out (str): Digits as a space-separated string. Returns an empty string if the list is empty.

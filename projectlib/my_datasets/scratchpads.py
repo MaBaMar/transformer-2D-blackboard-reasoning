@@ -121,6 +121,9 @@ class ScratchpadDataset(GeneratedDataset):
 
         n = max(len(d_a), len(d_b))
 
+        d_a = get_digits(a, n)
+        d_b = get_digits(b, n)
+
         # Generate scratchpad line by line
         scratchpad = f"{num_to_str(a, n)} {self.operand} {num_to_str(b, n)} , C: 0\n"
 
@@ -145,8 +148,8 @@ class ScratchpadDataset(GeneratedDataset):
 
         return (
             f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)}\n"
-            f"Target:\n<scratch>\n{scratchpad}</scratch>\n"
-            f"Result: {num_to_str(int(OPERATION[self.operand](a, b)))}\n"
+            f"Computation:\n{scratchpad}\n"
+            f"Result: {num_to_str(int(OPERATION[self.operand](a, b)))}\n<eos>"
         )
 
 
