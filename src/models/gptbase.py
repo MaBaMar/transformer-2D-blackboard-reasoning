@@ -185,7 +185,7 @@ class GPTStyleBaseline(nn.Module):
     @torch.inference_mode()
     def batch_inference(self, x: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
-        Perform batch inference on the model. Supports variable-length sequences.
+        Perform batch inference on the model. Supports variable-length sequences, but assumes that the input sequences are padded to the same length (left padding).
 
         Args:
             x (torch.Tensor): The input tensor.
@@ -194,18 +194,29 @@ class GPTStyleBaseline(nn.Module):
             torch.Tensor: The output tensor.
         """
 
-        x_new = torch.ones((x.shape[0], self._max_inference_steps), dtype=torch.long, device=x.device)
+        assert x.shape[0] == attention_mask.shape[0], "Input tensor and attention mask must have the same batch size."
+        assert x.shape[1] == attention_mask.shape[1], "Input tensor and attention mask must have the same sequence length."
 
-        # prepadding
+        x_new = torch.full((x.shape[0], self._max_inference_steps), self._pad_id, dtype=torch.long, device=x.device)
+        full_mask = torch.full((x.shape[0], self._max_inference_steps), False, dtype=torch.bool, device=x.device)
+        x_new[:, :x.shape[1]] = x
+        full_mask[:, :x.shape[1]] = attention_mask
 
+        curr_idx = x.shape[1]
         is_active = torch.ones(x.shape[0], dtype=torch.bool, device=x.device)
 
-        x_new: torch.Tensor = x.clone() # Note: this may be replaced with reference copying, if we do not need to be careful with reference semantics here
-
-        while is_active.any():
-            logits, _ = self.forward(x_new[is_active], attention_mask[is_active])
+        while is_active.any() and curr_idx < self._max_inference_steps:
+            logits, _ = self.forward(x_new[is_active, :curr_idx], full_mask[is_active, :curr_idx])
             next_tokens = logits[:, -1, :].argmax(dim=-1) # greedily select the next token
-            is_active[is_active][~self._find_and_append_inplace(x_new[is_active], next_tokens)] = False
+
+            active_indices = torch.where(is_active)[0]
+            x_new[active_indices, curr_idx] = next_tokens
+            full_mask[active_indices, curr_idx] = True
+
+            # update which batch-samples are still active
+            is_active[active_indices[next_tokens == self._eos_id]] = False
+
+            curr_idx += 1
 
         # for debugging, check if all sequences are finished
         if (cnt := (x_new == self._eos_id).any(dim=1).sum()) != x_new.shape[0]:
@@ -214,15 +225,3 @@ class GPTStyleBaseline(nn.Module):
             self.model_logger.debug("All computations in batch completed sucessfully")
 
         return x_new
-
-    def _find_and_append_inplace(self, curr_inputs: torch.Tensor, next_token: torch.Tensor) -> torch.Tensor:
-        # find index of first padding token for each sample
-        pad_mask = curr_inputs == self._pad_id
-        has_eos = (curr_inputs == self._eos_id).any(dim=1)
-
-        can_be_appended = pad_mask.any(dim=1) & ~has_eos
-
-        replace_targets = pad_mask[can_be_appended].to(torch.long).argmax(dim=1, keepdim=True)
-        curr_inputs[can_be_appended][replace_targets] = next_token[can_be_appended]
-
-        return can_be_appended

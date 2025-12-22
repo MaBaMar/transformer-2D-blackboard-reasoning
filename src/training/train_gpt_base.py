@@ -126,8 +126,8 @@ def train(
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     scheduler = get_cosine_decay_scheduler_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_steps)
 
-    model.train()
     for epoch in range(epochs):
+        model.train()
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", unit="batch")
 
         train_per_token_acc = 0.0
