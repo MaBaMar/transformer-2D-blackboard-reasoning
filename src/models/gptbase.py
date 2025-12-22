@@ -26,8 +26,9 @@ class GPTBaseTokenizer:
         Args:
             tokenizer_name (str): The name of the tokenizer to be used. Defaults to 'gpt2'.
         """
-        self._tok_internal: PreTrainedTokenizer = AutoTokenizer.from_pretrained(tokenizer_name).to(device)
+        self._tok_internal: PreTrainedTokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self._tok_internal.add_special_tokens({'pad_token': '<pad>', 'eos_token': '<eos>', 'sep_token': '<sep>'}, replace_additional_special_tokens=True)
+        self._device = device
 
     def get_token_config(self) -> dict[str, int]:
         pad_id = self._tok_internal.pad_token_id
@@ -37,15 +38,17 @@ class GPTBaseTokenizer:
         assert isinstance(pad_id, int) and isinstance(eos_id, int) and isinstance(sep_id, int), "Unexpected types!, please do not double register special tokens"
         return {'pad': pad_id, 'eos': eos_id, 'sep': sep_id}
 
-    def encode_batch(self, batch: list[str], inference_mode: bool):
+    def encode_batch(self, batch: list[str], inference_mode: bool) -> dict[str, torch.Tensor]:
         """Encode a batch of strings into token IDs."""
         self._tok_internal.padding_side = 'left' if inference_mode else 'right'
 
-        return self._tok_internal(
+        tokens = self._tok_internal(
             batch,
             padding=True,   # pads to batch max length
             return_tensors='pt',
         )
+
+        return {'input_ids': tokens.input_ids.to(self._device), 'attention_mask': tokens.attention_mask.to(self._device)}
 
     def strip_decode(self, tokens: torch.Tensor) -> list[str]:
         """
@@ -63,6 +66,7 @@ class GPTBaseTokenizer:
             res.append(decoded)
         return res
 
+    @property
     def vocab_size(self) -> int:
         return self._tok_internal.vocab_size
 

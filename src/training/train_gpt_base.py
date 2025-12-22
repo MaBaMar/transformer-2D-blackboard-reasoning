@@ -77,7 +77,7 @@ def train(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    trainlogger = getLogger(__name__)
+    trainlogger = getLogger(__name__ + os.path.basename(__file__))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -236,25 +236,24 @@ if __name__ == "__main__":
     basicConfig(level=DEBUG)
 
     parser = ArgumentParser()
-    parser.add_argument("--name", type=str)
+    parser.add_argument("--name", type=str, required=True)
     parser.add_argument("--model_name", type=str, default="gpt-base")
-    parser.add_argument("--dataset_variant", type=str)
-    parser.add_argument("--train_size", type=int)
-    parser.add_argument("--test_size", type=int)
+    parser.add_argument("--dataset_variant", type=str, required=True, choices=_DATA_T_REGISTRY.keys())
+    parser.add_argument("--train_size", type=int, required=True)
+    parser.add_argument("--test_size", type=int, required=True)
     parser.add_argument("--eval_size", type=int, default=0)
-    parser.add_argument("--digits", type=int)
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--max_context_length", type=int)
-    parser.add_argument("--max_output_length", type=int)
-    parser.add_argument("--model_dimension", type=int)
-    parser.add_argument("--num_heads", type=int)
-    parser.add_argument("--n_decoder_blocks", type=int)
-    parser.add_argument("--learning_rate", type=float)
+    parser.add_argument("--digits", type=int, required=True)
+    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--max_context_length", type=int, required=True)
+    parser.add_argument("--max_output_length", type=int, required=True)
+    parser.add_argument("--model_dimension", type=int, required=True)
+    parser.add_argument("--num_heads", type=int, required=True)
+    parser.add_argument("--n_decoder_blocks", type=int, required=True)
+    parser.add_argument("--learning_rate", type=float, required=True)
     parser.add_argument("--warmup_steps", type=int, default=1000)
-    parser.add_argument("--epochs", type=int)
+    parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
 
     args = parser.parse_args()
-
     train(**vars(args))
