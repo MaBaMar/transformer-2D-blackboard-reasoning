@@ -14,40 +14,10 @@ from tqdm import tqdm
 from src.models.eogar import EOgar
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
-
+from projectlib.trainutils import compute_accuracy_pt, compute_accuracy
 
 
 MODELS_PATH = "./models/"
-
-
-
-def compute_accuracy(logits, labels):
-    labels = labels[0]
-    preds = logits.argmax(dim=-1)
-
-    if labels.shape != preds.shape:
-        return 0, 0
-    
-    output_wise = (preds == labels).all(dim=1).float().mean().item()
-
-    return output_wise
-
-
-def compute_accuracy_pt(logits, labels):
-    labels = labels[0]
-    preds = logits.argmax(dim=-1)
-
-    if labels.shape != preds.shape:
-        return 0, 0
-    
-    labels = labels.reshape(-1)
-    preds = preds.reshape(-1)
-
-    token_wise = (preds == labels).float().mean().item()
-
-    return token_wise
-
-
 
 def train(
         name: str,
@@ -79,11 +49,11 @@ def train(
             "eval_size": eval_size,
             "digits": digits,
             "batch_size": batch_size,
-            "bb_spec": { 
-                "height": bb_spec.height, 
-                "width": bb_spec.width, 
-                "randomize_position": bb_spec.randomize_position, 
-                "operation": bb_spec.operation, 
+            "bb_spec": {
+                "height": bb_spec.height,
+                "width": bb_spec.width,
+                "randomize_position": bb_spec.randomize_position,
+                "operation": bb_spec.operation,
             },
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
