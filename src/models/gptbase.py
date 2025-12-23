@@ -4,7 +4,6 @@
 # Implementation of a basic GPT like model for CoT baselines. (baseline B)
 # ------------------------------------------------------------
 
-# TODO: prompt masking
 import torch
 import torch.nn as nn
 from typing import TypeAlias, Literal
@@ -153,7 +152,18 @@ class GPTStyleBaseline(nn.Module):
         for block in self.blocks:
             x = block(x=x, attention_mask=attention_mask)
 
-        logits, loss = self.head(context=x.contiguous(), targets=y.contiguous() if y is not None else None)
+        # mask out everything in front of sep token (including sep) for loss computation (= set to pad token)
+        if y is not None:
+            y_in = y.contiguous()
+            # index of sep token
+            sep_indices = (y_in == self._sep_id).nonzero(as_tuple=True)[1]
+
+            for i, sep_idx in enumerate(sep_indices):
+                y_in[i, :sep_idx + 1] = self._pad_id
+
+            y = y_in
+
+        logits, loss = self.head(context=x.contiguous(), targets=y)
         return logits, loss
 
     # -----------------------------------------

@@ -126,7 +126,7 @@ def train(
         # could add dropout, embedding dropout here as parameters, default is 0.1 for both and weight linking
     ).to(device)
 
-    trainlogger.info(f"Using model:\n{model}\nwith {sum(p.numel() for p in model.parameters())} parameters of which {sum(p.numel() for p in model.tok_emb.parameters())} are in the token embedding layer.")
+    trainlogger.info(f"Using model:\n{model}\nwith {sum(p.numel() for p in model.parameters())} parameters of which {2*sum(p.numel() for p in model.tok_emb.parameters())} are in the token embedding layer and logit generation layer in the final head.")
 
     num_steps = len(dataset_train) * epochs // batch_size
     optimizer = AdamW(model.parameters(), lr=learning_rate)
@@ -250,11 +250,11 @@ if __name__ == "__main__":
     parser.add_argument("--num_heads", type=int, required=True)
     parser.add_argument("--n_decoder_blocks", type=int, required=True)
     parser.add_argument("--learning_rate", type=float, required=True)
-    parser.add_argument("--warmup_steps", type=int, default=100)
+    parser.add_argument("--warmup_steps", type=int, default=10)
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
-    parser.add_argument("--use_lr_scheduler", type=bool, default=False)
+    parser.add_argument("--use_lr_scheduler", type=bool, default=True)
 
     args = parser.parse_args()
     train(**vars(args))
