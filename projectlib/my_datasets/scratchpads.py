@@ -107,7 +107,7 @@ class ScratchpadDataset(GeneratedDataset):
 
         for a, b in numbers:
             inputs.append(f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)}")
-            labels.append(f"{OPERATION[self.operand](a, b)}")
+            labels.append(OPERATION[self.operand](a, b))
             scratchpads.append(self._generate_scratchpad(a, b))
 
         if split == Split.EVAL:
@@ -150,7 +150,7 @@ class ScratchpadDataset(GeneratedDataset):
             raise NotImplementedError()
 
         return (
-            f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)}\n"
+            f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)} <sep>\n"
             f"Computation:\n{scratchpad}\n"
             f"Result: {num_to_str(int(OPERATION[self.operand](a, b)))}\n<eos>"
         )
