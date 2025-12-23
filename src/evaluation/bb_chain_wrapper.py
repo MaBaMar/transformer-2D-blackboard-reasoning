@@ -8,10 +8,9 @@
 
 from logging import getLogger
 import torch
-import numpy as np
 
 from projectlib.my_datasets._blackboard_operands import Subtraction
-from projectlib.my_datasets.blackboards import BasicOpBlackboardIterator, BlackboardSpec, BBVocabTokenizer, bb_prettyprint, operands_to_bbchaingen
+from projectlib.my_datasets.blackboards import BlackboardSpec, BBVocabTokenizer, bb_prettyprint, operands_to_bbchaingen
 from projectlib.wrappertypes import BBChainGenerator
 
 ASCII_NUMBERS = "0123456789"

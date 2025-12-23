@@ -210,23 +210,15 @@ def train(
         os.makedirs(MODELS_PATH)
 
     save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt")
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "config": {
-            "vocab_size": tokenizer.vocab_size,
-            "max_context_length": max_context_length,
-            "max_output_length": max_output_length,
-            "model_dimension": model_dimension,
-            "num_heads": num_heads,
-            "n_decoder_blocks": n_decoder_blocks,
-            "learning_rate": learning_rate,
-            "warmup_steps": warmup_steps,
-            "epochs": epochs,
-            "train_size": train_size,
-            "digits": digits,
-            "seed": seed,
-        }
-    }, save_path)
+
+    model.save_to_path(
+        save_path,
+        seed,
+        warmup_steps=warmup_steps,
+        epochs=epochs,
+        train_size=train_size,
+        digits=digits
+    )
 
     trainlogger.info(f"Model saved to {save_path}.")
 

@@ -5,12 +5,11 @@ Implementation of a basic GPT like model for CoT baselines.
 """
 
 # TODO: handle position IDs correctly when doing left-padding!
-# FIXME: inference pass
-#
 import torch
 import torch.nn as nn
 
 from transformers import AutoTokenizer, PreTrainedTokenizer
+import json
 
 from logging import getLogger
 
@@ -100,6 +99,9 @@ class GPTStyleBaseline(nn.Module):
         self.max_seq_len = max_seq_len
         self._max_inference_steps = max_inference_steps
         self.model_logger = getLogger(__name__)
+        self._d_model = d_model
+        self._num_heads = num_heads
+        self._num_blocks = num_blocks
 
         # weight linking:
         self.head.head.weight = self.tok_emb.weight
@@ -225,3 +227,64 @@ class GPTStyleBaseline(nn.Module):
             self.model_logger.debug("All computations in batch completed sucessfully")
 
         return x_new
+
+    def save_to_path(self, model_path: str, seed: int, **auxiliary_kwargs):
+        """Save the model to the given path together with some metadata
+
+        Args:
+            model_path (str): Path to save the model.
+        """
+        torch.save({
+            "model_state_dict": self.state_dict(),
+            "config": {
+                "vocab_size": self.tok_emb.num_embeddings,
+                "max_seq_len": self.max_seq_len,
+                "d_model": self._d_model,
+                "num_heads": self._num_heads,
+                "num_blocks": self._num_blocks,
+                "token_config": {
+                    "eos": self._eos_id,
+                    "pad": self._pad_id,
+                    "sep": self._sep_id
+                },
+                "dropout": self.dropout.p,
+                "embedding_dropout": self.embedding_dropout.p,
+                "max_inference_steps": self._max_inference_steps,
+                "seed": seed,
+                **auxiliary_kwargs
+            }
+        }, model_path)
+
+    @staticmethod
+    def load_from_path(model_path: str) -> GPTStyleBaseline:
+        """Load a locally stored model at the given path.
+
+        Args:
+            model_path (str): Path to the model.
+
+        Returns:
+            GPTStyleBaseline: Model initiated with the stored values.
+        """
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        checkpoint = torch.load(model_path, map_location=device)
+        config = checkpoint["config"]
+
+        model = GPTStyleBaseline(
+            vocab_size=config["vocab_size"],
+            max_seq_len=config["max_seq_len"],
+            d_model=config["d_model"],
+            num_heads=config["num_heads"],
+            num_blocks=config["num_blocks"],
+            token_config=config["token_config"],
+            dropout=config["dropout"],
+            embedding_dropout=config["embedding_dropout"],
+            max_inference_steps=config["max_inference_steps"]
+        ).to(device)
+
+        model.load_state_dict(checkpoint["model_state_dict"])
+
+        print("Loaded model with configuration:")
+        print(json.dumps(config, indent=4))
+
+        return model
