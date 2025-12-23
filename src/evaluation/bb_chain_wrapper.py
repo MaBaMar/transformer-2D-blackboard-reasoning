@@ -12,8 +12,7 @@ import torch
 from projectlib.my_datasets._blackboard_operands import Subtraction
 from projectlib.my_datasets.blackboards import BlackboardSpec, BBVocabTokenizer, bb_prettyprint, operands_to_bbchaingen
 from projectlib.wrappertypes import BBChainGenerator
-
-ASCII_NUMBERS = "0123456789"
+from projectlib.utils import ASCII_NUMBERS
 
 class BBChain:
     tokenizer: BBVocabTokenizer

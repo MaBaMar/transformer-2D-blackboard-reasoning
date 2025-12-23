@@ -18,6 +18,9 @@ def get_cosine_decay_scheduler_with_warmup(optimizer: torch.optim.Optimizer, num
 
     return LambdaLR(optimizer, lr_lambda)
 
+def get_constant_scheduler(optimizer: torch.optim.Optimizer):
+    return LambdaLR(optimizer, lambda _: 1)
+
 def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, ignore_tokens: int | None = None) -> float:
     preds = logits.argmax(dim=-1)
 

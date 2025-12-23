@@ -1,33 +1,37 @@
+# ------------------------------------------------------------
+# train_gptbase.py
+#
 # training script for GPT-Base model
 # I tried to keep it similar to train_eogar.py, but added lr scheduling
+# ------------------------------------------------------------
 
 from argparse import ArgumentParser
 import torch
 import os
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import LambdaLR
-from typing import Literal, TypeAlias
 from logging import getLogger, basicConfig, DEBUG
 from tqdm import tqdm
 
 import wandb
 import numpy as np
 
-from projectlib.my_datasets.cot import CoTDataset
-from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline
-from projectlib.my_datasets import ScratchpadDataset, GenerationSpec, Split
-from projectlib.trainutils import compute_accuracy, compute_accuracy_pt, get_cosine_decay_scheduler_with_warmup
+from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY, dataset_option_t
+from src.evaluation.gptbase_wrapper import GPTBaseInferenceBatch
+from projectlib.my_datasets import  GenerationSpec, Split
+from projectlib.trainutils import compute_accuracy_pt, get_constant_scheduler, get_cosine_decay_scheduler_with_warmup
 
-# up here for easier scalability if we need to add more datasets
-_DATA_T_REGISTRY = {
-    "scratchpad": ScratchpadDataset,
-    "cot": CoTDataset,
-}
+def compute_gptbase_digit_acc(logits: torch.Tensor, labels: torch.Tensor, tokenizer: GPTBaseTokenizer) -> float:
+    preds = logits.argmax(dim=-1)
+
+    pred_dec = tokenizer.strip_decode(preds)
+    b1 = GPTBaseInferenceBatch(pred_dec)
+
+    token_wise = (b1.results == labels).float().mean().item()
+
+    return token_wise
 
 MODELS_PATH = "./models/"
-
-dataset_option_t: TypeAlias = Literal["scratchpad", "cot"]
 
 def train(
     name: str,
@@ -47,6 +51,7 @@ def train(
     epochs: int,
     warmup_steps: int,
     seed: int,
+    use_lr_scheduler: bool,
     logging: str = "local",
 ):
     wandb.init(
@@ -68,6 +73,7 @@ def train(
             "n_decoder_blocks": n_decoder_blocks,
             "learning_rate": learning_rate,
             "warmup_steps": warmup_steps,
+            "use_lr_scheduler": use_lr_scheduler,
             "epochs": epochs,
             "seed": seed,
         },
@@ -117,21 +123,24 @@ def train(
         num_blocks=n_decoder_blocks,
         token_config=tokenizer.get_token_config(),
         max_inference_steps=max_output_length,
-        # could add dropout, embedding dropout here as parameters, default is 0.1 for both
+        # could add dropout, embedding dropout here as parameters, default is 0.1 for both and weight linking
     ).to(device)
 
-    trainlogger.info(f"Using model:\n{model}\nwith {sum(p.numel() for p in model.parameters())} parameters.")
+    trainlogger.info(f"Using model:\n{model}\nwith {sum(p.numel() for p in model.parameters())} parameters of which {sum(p.numel() for p in model.tok_emb.parameters())} are in the token embedding layer.")
 
     num_steps = len(dataset_train) * epochs // batch_size
     optimizer = AdamW(model.parameters(), lr=learning_rate)
-    scheduler = get_cosine_decay_scheduler_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_steps)
+    if use_lr_scheduler:
+        scheduler = get_cosine_decay_scheduler_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_steps)
+    else:
+        scheduler = get_constant_scheduler(optimizer)
 
     for epoch in range(epochs):
         model.train()
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", unit="batch")
 
-        train_per_token_acc = 0.0
-        train_all_token_acc = 0.0
+        train_res_acc = 0.0
+        train_pt_acc = 0.0
         train_loss = 0.0
 
         for step, data in enumerate(progress_bar):
@@ -147,7 +156,6 @@ def train(
             loss.backward()
             optimizer.step()
             scheduler.step()
-
             current_lr = scheduler.get_last_lr()[0]
 
             # Update the progress bar with current metrics
@@ -163,18 +171,18 @@ def train(
                 "lr": current_lr
             })
 
-            train_per_token_acc += compute_accuracy(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
-            train_all_token_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
+            train_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer)
+            train_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
             train_loss += loss.item()
 
         # Compute average metrics for the epoch
-        train_per_token_acc /= len(train_loader)
-        train_all_token_acc /= len(train_loader)
+        train_res_acc /= len(train_loader)
+        train_pt_acc /= len(train_loader)
         train_loss /= len(train_loader)
 
         # compute test set performance
         model.eval()
-        test_per_token_acc, test_all_token_acc, test_loss = 0.0, 0.0, 0.0
+        test_res_acc, test_pt_acc, test_loss = 0.0, 0.0, 0.0
 
         with torch.no_grad():
             for data in test_loader:
@@ -183,22 +191,22 @@ def train(
                 attention_mask = tokenizer_out['attention_mask'][..., :-1]
                 y = tokenizer_out['input_ids'][..., 1:]
                 logits, loss = model(x, attention_mask, y)
-                test_per_token_acc += compute_accuracy(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
-                test_all_token_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
+                test_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer)
+                test_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
                 test_loss += loss.item()
 
-        test_per_token_acc /= len(test_loader)
-        test_all_token_acc /= len(test_loader)
+        test_res_acc /= len(test_loader)
+        test_pt_acc /= len(test_loader)
         test_loss /= len(test_loader)
 
         # Log epoch metrics to WandB
         wandb.log({
             "epoch": epoch,
-            "train_acc": train_per_token_acc,
-            "train_acc_pt": train_all_token_acc,
+            "train_digit_acc": train_res_acc,
+            "train_acc_pt": train_pt_acc,
             "train_loss": train_loss,
-            "test_acc": test_per_token_acc,
-            "test_acc_pt": test_all_token_acc,
+            "test_digit_acc": test_res_acc,
+            "test_acc_pt": test_pt_acc,
             "test_loss": test_loss,
         })
 
@@ -246,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
+    parser.add_argument("--use_lr_scheduler", type=bool, default=False)
 
     args = parser.parse_args()
     train(**vars(args))

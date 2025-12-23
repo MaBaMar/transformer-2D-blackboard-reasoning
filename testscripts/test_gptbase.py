@@ -1,12 +1,14 @@
 
 import torch
 from torch.utils.data import DataLoader
+
 import numpy as np
 import os
 from logging import getLogger
 
 from projectlib.my_datasets import Split, GenerationSpec
-from src.training.train_gpt_base import _DATA_T_REGISTRY, GPTBaseTokenizer, GPTStyleBaseline
+from src.training.train_gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY
+from src.evaluation.gptbase_wrapper import GPTBaseWrapper
 
 if __name__ == "__main__":
 
@@ -59,7 +61,16 @@ if __name__ == "__main__":
         print("Expected Answer:", batch["label"][0])
         print("----------------[SAMPLE END]----------------\n\n\n")
 
-        if sample_inspect_count > 0:
+        if sample_inspect_count > 1:
             sample_inspect_count -= 1
         else:
             break
+
+    wrapper = GPTBaseWrapper(model, model.device, tokenizer)
+
+    test_batch = next(iter(test_loader))
+
+    xs = wrapper.compute_from_databatch(test_batch["input"])
+    print(xs)
+    print(xs.results, test_batch["label"])
+    print("Mean Accuracy:", (xs.results == test_batch["label"]).float().mean().item())

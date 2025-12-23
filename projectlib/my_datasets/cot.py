@@ -106,7 +106,7 @@ class CoTDataset(GeneratedDataset):
             case Split.TRAIN: numbers = self.train_nums
 
         for a, b in numbers:
-            inputs.append(f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)}")
+            inputs.append(f"Input: {num_to_str(a)} {self.operand} {num_to_str(b)} <sep>")
             labels.append(OPERATION[self.operand](a, b))
             scratchpads.append(self._generate_scratchpad(a, b))
 

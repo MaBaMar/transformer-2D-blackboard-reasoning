@@ -1,12 +1,13 @@
-"""
-gptbase.py
+# ------------------------------------------------------------
+# gptbase.py
+#
+# Implementation of a basic GPT like model for CoT baselines. (baseline B)
+# ------------------------------------------------------------
 
-Implementation of a basic GPT like model for CoT baselines.
-"""
-
-# TODO: handle position IDs correctly when doing left-padding!
+# TODO: prompt masking
 import torch
 import torch.nn as nn
+from typing import TypeAlias, Literal
 
 from transformers import AutoTokenizer, PreTrainedTokenizer
 import json
@@ -14,7 +15,22 @@ import json
 from logging import getLogger
 
 from projectlib.transformer.tpe2d_model import FeedForward, OutputHead
+from projectlib.my_datasets import ScratchpadDataset, CoTDataset
 
+# -----------------------------------------
+# model registry
+# -----------------------------------------
+# up here for easier scalability if we need to add more datasets
+_DATA_T_REGISTRY = {
+    "scratchpad": ScratchpadDataset,
+    "cot": CoTDataset,
+}
+dataset_option_t: TypeAlias = Literal["scratchpad", "cot"]
+
+
+# -----------------------------------------
+# custom tokenizer
+# -----------------------------------------
 class GPTBaseTokenizer:
     def __init__(self, device: torch.device, tokenizer_name: str = 'gpt2'):
         """
@@ -67,6 +83,10 @@ class GPTBaseTokenizer:
             res.append(decoded)
         return res
 
+
+# -----------------------------------------
+# model implementation
+# -----------------------------------------
 class GPTStyleBaseline(nn.Module):
     def __init__(
         self,
@@ -78,7 +98,8 @@ class GPTStyleBaseline(nn.Module):
         token_config: dict,
         dropout: float = 0.1,
         embedding_dropout: float = 0.1,
-        max_inference_steps: int = 100
+        max_inference_steps: int = 100,
+        use_weight_linking: bool = False
     ) -> None:
         super().__init__()
         self.tok_emb = nn.Embedding(vocab_size, d_model)    # token embedding
@@ -104,7 +125,14 @@ class GPTStyleBaseline(nn.Module):
         self._num_blocks = num_blocks
 
         # weight linking:
-        self.head.head.weight = self.tok_emb.weight
+        if use_weight_linking:
+            self.head.head.weight = self.tok_emb.weight
+
+        self._linked_weights = use_weight_linking
+
+    @property
+    def device(self):
+        return self.tok_emb.weight.device
 
     def forward(self, x: torch.Tensor, attention_mask: torch.Tensor, y: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor | None]:
         assert x.ndim == 2, f"input must be 2D tensor, got {x.ndim}D"
@@ -250,6 +278,7 @@ class GPTStyleBaseline(nn.Module):
                 "dropout": self.dropout.p,
                 "embedding_dropout": self.embedding_dropout.p,
                 "max_inference_steps": self._max_inference_steps,
+                "use_weight_linking": self._linked_weights,
                 "seed": seed,
                 **auxiliary_kwargs
             }
@@ -279,7 +308,8 @@ class GPTStyleBaseline(nn.Module):
             token_config=config["token_config"],
             dropout=config["dropout"],
             embedding_dropout=config["embedding_dropout"],
-            max_inference_steps=config["max_inference_steps"]
+            max_inference_steps=config["max_inference_steps"],
+            use_weight_linking=config["use_weight_linking"]
         ).to(device)
 
         model.load_state_dict(checkpoint["model_state_dict"])
