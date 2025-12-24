@@ -123,6 +123,7 @@ def train(
         num_blocks=n_decoder_blocks,
         token_config=tokenizer.get_token_config(),
         max_inference_steps=max_output_length,
+        # use_weight_linking=True,
         # could add dropout, embedding dropout here as parameters, default is 0.1 for both and weight linking
     ).to(device)
 
@@ -254,7 +255,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
-    parser.add_argument("--use_lr_scheduler", type=bool, default=True)
+    parser.add_argument("--use_lr_scheduler", type=bool, default=False)
 
     args = parser.parse_args()
     train(**vars(args))

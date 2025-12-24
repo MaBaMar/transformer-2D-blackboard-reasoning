@@ -104,6 +104,12 @@ class GPTBaseWrapper:
         Returns:
             GPTBaseInferenceBatch: The inference batch.
         """
-        tokenized_batch: dict[str, torch.Tensor] = self.tokenizer.encode_batch(x, inference_mode=True)
-        computations: torch.Tensor = self.model.batch_inference(tokenized_batch["input_ids"], tokenized_batch["attention_mask"])
-        return GPTBaseInferenceBatch(self.tokenizer.strip_decode(computations))
+        wastrain = self.model.training
+        self.model.eval()
+        try:
+            tokenized_batch: dict[str, torch.Tensor] = self.tokenizer.encode_batch(x, inference_mode=True)
+            computations: torch.Tensor = self.model.batch_inference(tokenized_batch["input_ids"], tokenized_batch["attention_mask"])
+            return GPTBaseInferenceBatch(self.tokenizer.strip_decode(computations))
+        finally:
+            if wastrain:
+                self.model.train()

@@ -140,12 +140,17 @@ class GPTStyleBaseline(nn.Module):
         L = x.shape[1]
         assert L <= self.max_seq_len, f"sequence length {L} exceeds max_seq_len {self.max_seq_len}"
 
-        # patch attention mask in case of left padding
-        pos_ids = attention_mask.cumsum(dim=1) - 1
-        pos_ids = pos_ids.masked_fill(pos_ids == -1, 0)
+        # make sure all padding tokens are ignored!
+        attention_mask = attention_mask & (x != self._pad_id)
+
+        # compute position IDs for all non-padding tokens
+        pos_ids = (attention_mask.cumsum(dim=1) - 1).clamp(min=0)
 
         # embedding (+ some random embedding dropout)
         x = self.tok_emb(x) + self.pos_emb(pos_ids)
+
+        # zero out padding tokens to avoid influencing feed forward, layer norm etc....
+        x = x * attention_mask.unsqueeze(-1)
         x = self.embedding_dropout(x)
 
         # pass through transformer blocks
@@ -202,6 +207,13 @@ class GPTStyleBaseline(nn.Module):
             # do masked multihead attention:
             causal_mask = self.causal_buffer[:L, :L]
             h, _ = self.attn(h, h, h, attn_mask=causal_mask, key_padding_mask=(attention_mask==0), need_weights=False)
+
+            # currently, pad tokens are completely masked out and cannot even attend to themselves. This produces
+            # "floating" values (values with no input, i.e. NaNs)  after attention. The NaN values then propagate and in the final head mix with all
+            # other NN values. This is bad and produces only NaN logits. To solve this, I currently just replace the NaNs
+            # I'm open for better solutions (like modifying attention masks). However, this fix effectively works and ensures the
+            # desired left-padding invariance (notably boosting accuracy).
+            h[attention_mask == 0] = 0.0
             x = x + self.dropout(h)
 
             h2 = self.ln2(x)
@@ -223,6 +235,7 @@ class GPTStyleBaseline(nn.Module):
         self._max_inference_steps = steps
 
     @torch.inference_mode()
+    @torch.no_grad()
     def batch_inference(self, x: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
         Perform batch inference on the model. Supports variable-length sequences, but assumes that the input sequences are padded to the same length (left padding).
