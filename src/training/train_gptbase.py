@@ -21,8 +21,12 @@ from src.evaluation.gptbase_wrapper import GPTBaseInferenceBatch
 from projectlib.my_datasets import  GenerationSpec, Split
 from projectlib.trainutils import compute_accuracy_pt, get_constant_scheduler, get_cosine_decay_scheduler_with_warmup
 
-def compute_gptbase_digit_acc(logits: torch.Tensor, labels: torch.Tensor, tokenizer: GPTBaseTokenizer) -> float:
-    preds = logits.argmax(dim=-1)
+def compute_gptbase_digit_acc(logits: torch.Tensor, labels: torch.Tensor, tokenizer: GPTBaseTokenizer, attn_mask: torch.Tensor) -> float:
+    preds: torch.Tensor = logits.argmax(dim=-1)
+    assert preds.shape == attn_mask.shape, f"Predictions shape {preds.shape} does not match mask shape {attn_mask.shape}"
+
+    # we want to ignore what the model outputs for the padding at the end
+    preds[~attn_mask.bool()] = tokenizer._tok_internal.pad_token_id
 
     pred_dec = tokenizer.strip_decode(preds)
     b1 = GPTBaseInferenceBatch(pred_dec)
@@ -115,17 +119,18 @@ def train(
 
     trainlogger.info("Data loaded.")
 
-    model: GPTStyleBaseline = GPTStyleBaseline(
-        vocab_size=tokenizer.vocab_size,
-        max_seq_len=max_context_length,
-        d_model=model_dimension,
-        num_heads=num_heads,
-        num_blocks=n_decoder_blocks,
-        token_config=tokenizer.get_token_config(),
-        max_inference_steps=max_output_length,
-        # use_weight_linking=True,
-        # could add dropout, embedding dropout here as parameters, default is 0.1 for both and weight linking
-    ).to(device)
+    # model: GPTStyleBaseline = GPTStyleBaseline(
+    #     vocab_size=tokenizer.vocab_size,
+    #     max_seq_len=max_context_length,
+    #     d_model=model_dimension,
+    #     num_heads=num_heads,
+    #     num_blocks=n_decoder_blocks,
+    #     token_config=tokenizer.get_token_config(),
+    #     max_inference_steps=max_output_length,
+    #     # use_weight_linking=True,
+    #     # could add dropout, embedding dropout here as parameters, default is 0.1 for both and weight linking
+    # ).to(device)
+    model = GPTStyleBaseline.load_from_path(os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt"))
 
     trainlogger.info(f"Using model:\n{model}\nwith {sum(p.numel() for p in model.parameters())} parameters of which {2*sum(p.numel() for p in model.tok_emb.parameters())} are in the token embedding layer and logit generation layer in the final head.")
 
@@ -149,7 +154,9 @@ def train(
 
             tokenizer_out: dict[str, torch.Tensor] = tokenizer.encode_batch(data['input'], inference_mode=False)
             x = tokenizer_out['input_ids'][..., :-1]
-            attention_mask = tokenizer_out['attention_mask'][..., :-1]
+            mask_raw = tokenizer_out['attention_mask']
+            attention_mask = mask_raw[..., :-1]
+            pred_mask = mask_raw[..., 1:] # for accuracy computation, we want to ignore all padding tokens at the end
             y = tokenizer_out["input_ids"][..., 1:]
 
             logits, loss = model(x, attention_mask, y)
@@ -172,7 +179,7 @@ def train(
                 "lr": current_lr
             })
 
-            train_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer)
+            train_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer, pred_mask)
             train_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
             train_loss += loss.item()
 
@@ -189,10 +196,12 @@ def train(
             for data in test_loader:
                 tokenizer_out = tokenizer.encode_batch(data['input'], inference_mode=False)
                 x = tokenizer_out['input_ids'][..., :-1]
-                attention_mask = tokenizer_out['attention_mask'][..., :-1]
+                mask_raw = tokenizer_out['attention_mask']
+                attention_mask = mask_raw[..., :-1]
+                pred_mask = mask_raw[..., 1:] # for accuracy computation, we want to ignore all padding tokens at the end
                 y = tokenizer_out['input_ids'][..., 1:]
                 logits, loss = model(x, attention_mask, y)
-                test_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer)
+                test_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer, pred_mask)
                 test_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
                 test_loss += loss.item()
 
