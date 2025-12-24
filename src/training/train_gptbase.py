@@ -182,10 +182,10 @@ def train(
         train_loss /= len(train_loader)
 
         # compute test set performance
-        model.eval()
         test_res_acc, test_pt_acc, test_loss = 0.0, 0.0, 0.0
 
         with torch.no_grad():
+            model.eval()
             for data in test_loader:
                 tokenizer_out = tokenizer.encode_batch(data['input'], inference_mode=False)
                 x = tokenizer_out['input_ids'][..., :-1]
@@ -196,6 +196,7 @@ def train(
                 test_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
                 test_loss += loss.item()
 
+        model.train()
         test_res_acc /= len(test_loader)
         test_pt_acc /= len(test_loader)
         test_loss /= len(test_loader)
@@ -242,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_variant", type=str, required=True, choices=_DATA_T_REGISTRY.keys())
     parser.add_argument("--train_size", type=int, required=True)
     parser.add_argument("--test_size", type=int, required=True)
-    parser.add_argument("--eval_size", type=int, default=0)
+    parser.add_argument("--eval_size", type=int, required=True)
     parser.add_argument("--digits", type=int, required=True)
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--max_context_length", type=int, required=True)

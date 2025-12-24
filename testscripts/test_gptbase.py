@@ -16,10 +16,10 @@ if __name__ == "__main__":
     # SET parameters as used during training
     seed = 0
     digits = 12
-    eval_size = 100
+    eval_size = 1000
     test_size = 1000
-    train_size = 10000
-    batch_size = 10
+    train_size = 8000
+    batch_size = 12
 
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -90,6 +90,7 @@ if __name__ == "__main__":
     progress_bar = tqdm(test_loader)
     for test_batch in progress_bar:
         xs = wrapper.compute_from_databatch(test_batch["input"])
+        print("wrong sample:", xs.results[xs.results != test_batch["label"]], test_batch["label"][xs.results != test_batch["label"]])
         batch_acc = (xs.results == test_batch["label"]).float().mean().item()
         acc += batch_acc
         progress_bar.set_postfix_str(f"batch_accuracy: {batch_acc}")
