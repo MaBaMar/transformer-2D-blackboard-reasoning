@@ -50,6 +50,10 @@ applicable_configs = {
         { "model_name": "EOgar-d64-h8-b8", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
         { "model_name": "EOgar-d64-h16-b16", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
     ],
+    "bb_specs": [
+        { "height": 8, "width": 16, "randomize_position": "false", "operation": "addition" },
+        # { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
+    ],
     "rope_mode": ["2d"],
     "learning_rate": [1e-3],
     "epochs": [8],
@@ -62,29 +66,34 @@ def main(args):
             for test_size in applicable_configs["test_sizes"]:
                 for batch_size in applicable_configs["batch_size"]:
                     for model_spec in applicable_configs["model_spec"]:
-                        for rope_mode in applicable_configs["rope_mode"]:
-                            for learning_rate in applicable_configs["learning_rate"]:
-                                for epochs in applicable_configs["epochs"]:
-                                    for seed in applicable_configs["seed"]:
-                                        flags = {
-                                            "name": NAME,
-                                            "model_name": model_spec["model_name"],
-                                            "digits": digits,
-                                            "train_size": train_size,
-                                            "test_size": test_size,
-                                            "eval_size": EVAL_SIZE,
-                                            "batch_size": batch_size,
-                                            "model_dimension": model_spec["model_dimension"],
-                                            "num_heads_encoder": model_spec["num_heads_encoder"],
-                                            "n_encoder_blocks": model_spec["n_encoder_blocks"],
-                                            "rope_mode": rope_mode,
-                                            "learning_rate": learning_rate,
-                                            "epochs": epochs,
-                                            "seed": seed,
-                                            "logging": LOGGING,
-                                        }
-                                        cmd = generate_base_command(experiment, flags=flags)
-                                        command_list.append(cmd)
+                        for bb_spec in applicable_configs["bb_specs"]:
+                            for rope_mode in applicable_configs["rope_mode"]:
+                                for learning_rate in applicable_configs["learning_rate"]:
+                                    for epochs in applicable_configs["epochs"]:
+                                        for seed in applicable_configs["seed"]:
+                                            flags = {
+                                                "name": NAME,
+                                                "model_name": model_spec["model_name"],
+                                                "digits": digits,
+                                                "train_size": train_size,
+                                                "test_size": test_size,
+                                                "eval_size": EVAL_SIZE,
+                                                "batch_size": batch_size,
+                                                "bb_height": bb_spec["height"],
+                                                "bb_width": bb_spec["width"],
+                                                "bb_randomize_position": bb_spec["randomize_position"],
+                                                "operation": bb_spec["operation"],
+                                                "model_dimension": model_spec["model_dimension"],
+                                                "num_heads_encoder": model_spec["num_heads_encoder"],
+                                                "n_encoder_blocks": model_spec["n_encoder_blocks"],
+                                                "rope_mode": rope_mode,
+                                                "learning_rate": learning_rate,
+                                                "epochs": epochs,
+                                                "seed": seed,
+                                                "logging": LOGGING,
+                                            }
+                                            cmd = generate_base_command(experiment, flags=flags)
+                                            command_list.append(cmd)
 
     generate_run_commands(
         command_list,
@@ -102,6 +111,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-cpus", type=int, default=1)
     parser.add_argument("--num-gpus", type=int, default=0)
-    parser.add_argument("--num-hours", type=int, default=23)
+    parser.add_argument("--num-hours", type=int, default=8)
     args = parser.parse_args()
     main(args)

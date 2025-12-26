@@ -133,7 +133,7 @@ def generate_run_commands(
         if num_hours is None:
             num_hours = 23 if long else 3
         sbatch_cmd = (
-            "sbatch -A ls_krausea "
+            "sbatch "
             + f"--time={num_hours}:59:00 "
             + f"--mem-per-cpu={mem} "
             + f"-n {num_cpus} "
