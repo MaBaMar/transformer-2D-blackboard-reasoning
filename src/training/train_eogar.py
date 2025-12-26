@@ -4,6 +4,7 @@ import os
 import torch
 import logging
 
+from transformers.optimization import get_constant_schedule, get_cosine_schedule_with_warmup, get_linear_schedule_with_warmup
 import wandb
 import numpy as np
 
@@ -35,8 +36,23 @@ def train(
         learning_rate: float,
         epochs: int,
         seed: int,
+        use_lr_scheduler: bool,
+        warmup_steps: int,
+        num_sched_cycles: float,
         logging: str = "local",
     ):
+
+    if use_lr_scheduler:
+        schedule_info = {
+                "name": "cosine_annealing_with_warmup",
+                "warmup_steps": warmup_steps,
+                "num_cycles": num_sched_cycles
+            }
+    else:
+        schedule_info = {
+            "name": "constant_scheduler",
+            "learning_rate": learning_rate
+        }
 
     wandb.init(
         name=name,
@@ -60,6 +76,9 @@ def train(
             "n_encoder_blocks": n_encoder_blocks,
             "rope_mode": rope_mode,
             "learning_rate": learning_rate,
+            "scheduler": {
+                **schedule_info
+            },
             "epochs": epochs,
             "seed": seed,
         },
@@ -123,6 +142,10 @@ def train(
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
+    if use_lr_scheduler:
+        scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=len(train_loader) * epochs)
+    else:
+        scheduler = get_constant_schedule(optimizer)
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model initialized with {num_params} parameters.")
@@ -146,11 +169,14 @@ def train(
             # Backward pass
             loss.backward()
             optimizer.step()
+            scheduler.step()
+            current_lr = scheduler.get_last_lr()[0]
 
             wandb.log({
                 "epoch": epoch,
                 "step": step,
                 "loss": loss.item(),
+                "lr": current_lr
             })
 
             train_acc += compute_accuracy(logits, y_batch)
@@ -245,6 +271,9 @@ def main(args):
         epochs=args.epochs,
         seed=args.seed,
         logging=args.logging,
+        use_lr_scheduler=args.use_lr_scheduler,
+        warmup_steps=args.warmup_steps,
+        num_sched_cycles=args.num_sched_cycles
     )
 
 
@@ -272,5 +301,9 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
+    parser.add_argument("--use_lr_scheduler", type=bool, default=False)
+    parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
+    parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
+
     args, _ = parser.parse_known_args()
     main(args)

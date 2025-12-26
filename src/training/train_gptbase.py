@@ -13,15 +13,29 @@ from torch.utils.data import DataLoader
 from logging import getLogger, basicConfig, DEBUG
 from tqdm import tqdm
 
+from transformers.optimization import get_constant_schedule, get_cosine_schedule_with_warmup
 import wandb
 import numpy as np
 
 from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY, dataset_option_t
 from src.evaluation.gptbase_wrapper import GPTBaseInferenceBatch
 from projectlib.my_datasets import  GenerationSpec, Split
-from projectlib.trainutils import compute_accuracy_pt, get_constant_scheduler, get_cosine_decay_scheduler_with_warmup
+from projectlib.trainutils import compute_accuracy_pt
 
-def compute_gptbase_digit_acc(logits: torch.Tensor, labels: torch.Tensor, tokenizer: GPTBaseTokenizer, attn_mask: torch.Tensor) -> float:
+def compute_gptbase_digit_acc_from_stream(logits: torch.Tensor, labels: torch.Tensor, tokenizer: GPTBaseTokenizer, attn_mask: torch.Tensor) -> float:
+    """
+    Compute the accuracy of the GPTBase model's predictions based on the model output.
+    We mask out all padding tokens at the end based on the attention mask. This ensures that garbage digits produced from padding tokens are ignored (same as in the loss).
+
+    Args:
+        logits (torch.Tensor): The logits output by the model.
+        labels (torch.Tensor): The true labels (tensor of ints).
+        tokenizer (GPTBaseTokenizer): The tokenizer used to encode the input.
+        attn_mask (torch.Tensor): The attention mask.
+
+    Returns:
+        float: The accuracy of the model's predictions on this batch. The caller is responsible for averaging over batches and handling potentially different batch sizes.
+    """
     preds: torch.Tensor = logits.argmax(dim=-1)
     assert preds.shape == attn_mask.shape, f"Predictions shape {preds.shape} does not match mask shape {attn_mask.shape}"
 
@@ -53,11 +67,25 @@ def train(
     n_decoder_blocks: int,
     learning_rate: float,
     epochs: int,
-    warmup_steps: int,
     seed: int,
     use_lr_scheduler: bool,
+    warmup_steps: int,
+    num_sched_cycles: float,
+    link_weights: bool,
     logging: str = "local",
 ):
+    if use_lr_scheduler:
+        schedule_info = {
+                "name": "cosine_annealing_with_warmup",
+                "warmup_steps": warmup_steps,
+                "num_cycles": num_sched_cycles
+            }
+    else:
+        schedule_info = {
+            "name": "constant_scheduler",
+            "learning_rate": learning_rate
+        }
+
     wandb.init(
         name=name,
         entity="blackboard-reasoning",
@@ -76,8 +104,10 @@ def train(
             "num_heads": num_heads,
             "n_decoder_blocks": n_decoder_blocks,
             "learning_rate": learning_rate,
-            "warmup_steps": warmup_steps,
-            "use_lr_scheduler": use_lr_scheduler,
+            "scheduler": {
+                **schedule_info
+            },
+            "link_weights": link_weights,
             "epochs": epochs,
             "seed": seed,
         },
@@ -119,27 +149,26 @@ def train(
 
     trainlogger.info("Data loaded.")
 
-    # model: GPTStyleBaseline = GPTStyleBaseline(
-    #     vocab_size=tokenizer.vocab_size,
-    #     max_seq_len=max_context_length,
-    #     d_model=model_dimension,
-    #     num_heads=num_heads,
-    #     num_blocks=n_decoder_blocks,
-    #     token_config=tokenizer.get_token_config(),
-    #     max_inference_steps=max_output_length,
-    #     # use_weight_linking=True,
-    #     # could add dropout, embedding dropout here as parameters, default is 0.1 for both and weight linking
-    # ).to(device)
-    model = GPTStyleBaseline.load_from_path(os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt"))
+    model: GPTStyleBaseline = GPTStyleBaseline(
+        vocab_size=tokenizer.vocab_size,
+        max_seq_len=max_context_length,
+        d_model=model_dimension,
+        num_heads=num_heads,
+        num_blocks=n_decoder_blocks,
+        token_config=tokenizer.get_token_config(),
+        max_inference_steps=max_output_length,
+        use_weight_linking=link_weights,
+        # could add dropout, embedding dropout here as parameters, default is 0.1 for both
+    ).to(device)
 
     trainlogger.info(f"Using model:\n{model}\nwith {sum(p.numel() for p in model.parameters())} parameters of which {2*sum(p.numel() for p in model.tok_emb.parameters())} are in the token embedding layer and logit generation layer in the final head.")
 
     num_steps = len(dataset_train) * epochs // batch_size
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     if use_lr_scheduler:
-        scheduler = get_cosine_decay_scheduler_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_steps)
+        scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_steps, num_cycles=num_sched_cycles)
     else:
-        scheduler = get_constant_scheduler(optimizer)
+        scheduler = get_constant_schedule(optimizer)
 
     for epoch in range(epochs):
         model.train()
@@ -179,7 +208,7 @@ def train(
                 "lr": current_lr
             })
 
-            train_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer, pred_mask)
+            train_res_acc += compute_gptbase_digit_acc_from_stream(logits, data['label'], tokenizer, pred_mask)
             train_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
             train_loss += loss.item()
 
@@ -201,7 +230,7 @@ def train(
                 pred_mask = mask_raw[..., 1:] # for accuracy computation, we want to ignore all padding tokens at the end
                 y = tokenizer_out['input_ids'][..., 1:]
                 logits, loss = model(x, attention_mask, y)
-                test_res_acc += compute_gptbase_digit_acc(logits, data['label'], tokenizer, pred_mask)
+                test_res_acc += compute_gptbase_digit_acc_from_stream(logits, data['label'], tokenizer, pred_mask)
                 test_pt_acc += compute_accuracy_pt(logits, y, ignore_tokens=tokenizer._tok_internal.pad_token_id)
                 test_loss += loss.item()
 
@@ -260,12 +289,14 @@ if __name__ == "__main__":
     parser.add_argument("--model_dimension", type=int, required=True)
     parser.add_argument("--num_heads", type=int, required=True)
     parser.add_argument("--n_decoder_blocks", type=int, required=True)
+    parser.add_argument("--link_weights", type=bool, default=False)
     parser.add_argument("--learning_rate", type=float, required=True)
-    parser.add_argument("--warmup_steps", type=int, default=10)
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     parser.add_argument("--use_lr_scheduler", type=bool, default=False)
+    parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
+    parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
 
     args = parser.parse_args()
     train(**vars(args))
