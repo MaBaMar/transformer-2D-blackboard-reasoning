@@ -64,7 +64,7 @@ def construct_train_loader(gold_set, collected_errors, batch_size, collate_fn):
 
     error_set = ErrorDataset(collected_errors)
 
-    combined_dataset = torch.utils.data.ConcatDataset([gold_set, error_set])
+    combined_dataset = ConcatDataset([gold_set, error_set])
 
     return DataLoader(
         combined_dataset,
