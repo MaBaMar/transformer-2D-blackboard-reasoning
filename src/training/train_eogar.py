@@ -48,7 +48,7 @@ def compute_accuracy_pt(logits, labels):
     return token_wise
 
 
-class ErrorDataset(torch.utils.data.Dataset):
+class ErrorDataset(Dataset):
     def __init__(self, error_list):
         self.error_list = error_list
     def __len__(self):
