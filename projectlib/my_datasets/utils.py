@@ -33,7 +33,7 @@ def get_number(digits: list[int]) -> int:
     return int("".join(map(str, digits)))
 
 
-def num_to_str(num: int, length: int = None) -> str:
+def num_to_str(num: int, length: int | None = None) -> str:
     """
     Convert an integer into a space-separated string of its digits.
 
@@ -53,7 +53,7 @@ def num_to_str(num: int, length: int = None) -> str:
     return " ".join(map(str, padding + digits))
 
 
-def digits_to_str(digits: list[int], length: int = None) -> str:
+def digits_to_str(digits: list[int], length: int | None = None) -> str:
     """
     Convert a list of digits into a space-separated string.
 
@@ -66,7 +66,7 @@ def digits_to_str(digits: list[int], length: int = None) -> str:
     """
     if length == 0:
         return ""
-    
+
     if length is None:
         padding = []
     else:

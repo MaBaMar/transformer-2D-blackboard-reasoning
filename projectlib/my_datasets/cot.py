@@ -168,7 +168,7 @@ class CoTDataset(GeneratedDataset):
             curr_digits = [1] + get_digits((10 + curr_a) - (curr_b + prev_carry)) if borrow else get_digits(curr_a - (curr_b + prev_carry))
             operation = f"1{curr_a} - ({curr_b} + {prev_carry})" if borrow else f"{curr_a} - ({curr_b} + {prev_carry})"
         else:
-            NotImplementedError()
+            raise NotImplementedError()
 
         # Add current digit to result
         curr_digit = curr_digits[-1]

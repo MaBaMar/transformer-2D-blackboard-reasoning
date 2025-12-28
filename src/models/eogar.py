@@ -181,39 +181,6 @@ class Encoder(nn.Module):
             return x, ent_loss
 
 
-class Head(nn.Module):
-    def __init__(
-        self,
-        vocab_size: int,
-        d_model: int,
-        pad_id: int,
-    ) -> None:
-        super().__init__()
-        # building blocks
-        self.ln = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
-        self.pad_id = pad_id
-
-    def forward(
-        self,
-        context: torch.Tensor,
-        targets: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-
-        h = self.ln(context)
-        logits = self.head(h)
-
-        loss: Optional[torch.Tensor] = None
-        if targets is not None:
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                targets.view(-1),
-                ignore_index=self.pad_id
-            )
-
-        return logits, loss
-
-
 class EOgar(BBChainGenerator):
     def __init__(
         self,

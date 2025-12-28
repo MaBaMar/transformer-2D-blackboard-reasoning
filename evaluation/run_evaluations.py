@@ -167,11 +167,8 @@ def check_prediction(prediction, label, task) -> int:
         raise NotImplementedError("Implement basic!")
         result_true = int(label[0])
 
-    elif task == "scratchpad" or task == "cot":
+    elif task in ["scratchpad", "cot", "blackboard-2d", "blackboard-1d"]:
         # we need to do sum, as the last batch might not be full (we have drop_last = False in the dataloader)
-        return (prediction == label).float().sum()
-
-    elif task == "blackboard-2d" or task == "blackboard-1d":
         return (prediction == label).float().sum()
 
     else:

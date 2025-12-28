@@ -289,12 +289,12 @@ if __name__ == "__main__":
     parser.add_argument("--model_dimension", type=int, required=True)
     parser.add_argument("--num_heads", type=int, required=True)
     parser.add_argument("--n_decoder_blocks", type=int, required=True)
-    parser.add_argument("--link_weights", type=bool, default=False)
+    parser.add_argument("--link_weights", action="store_true", default=False)
     parser.add_argument("--learning_rate", type=float, required=True)
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
-    parser.add_argument("--use_lr_scheduler", type=bool, default=False)
+    parser.add_argument("--use_lr_scheduler", action="store_true", default=False)
     parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
     parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
 
