@@ -57,7 +57,7 @@ class ErrorDataset(Dataset):
         return self.error_list[idx]
 
 
-def construct_train_loader(gold_set, collected_errors, batch_size, collate_fn):
+def construct_train_loader(gold_set: Dataset, collected_errors: torch.Tensor, batch_size: int, collate_fn):
 
     if not collected_errors:
         return DataLoader(gold_set, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
