@@ -4,6 +4,7 @@ import os
 import torch
 import logging
 
+from transformers.optimization import get_constant_schedule, get_cosine_schedule_with_warmup, get_linear_schedule_with_warmup
 import wandb
 import numpy as np
 
@@ -14,39 +15,10 @@ from tqdm import tqdm
 from src.models.eogar import EOgar
 from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
-
+from projectlib.trainutils import compute_accuracy_pt, compute_accuracy
 
 
 MODELS_PATH = "./models/"
-
-
-
-def compute_accuracy(logits, labels):
-    labels = labels[0]
-    preds = logits.argmax(dim=-1)
-
-    if labels.shape != preds.shape:
-        return 0, 0
-    
-    output_wise = (preds == labels).all(dim=1).float().mean().item()
-
-    return output_wise
-
-
-def compute_accuracy_pt(logits, labels):
-    labels = labels[0]
-    preds = logits.argmax(dim=-1)
-
-    if labels.shape != preds.shape:
-        return 0, 0
-    
-    labels = labels.reshape(-1)
-    preds = preds.reshape(-1)
-
-    token_wise = (preds == labels).float().mean().item()
-
-    return token_wise
-
 
 class ErrorDataset(Dataset):
     def __init__(self, error_list: list):
@@ -105,8 +77,6 @@ def collect_error_samples(model: EOgar, error_pool_set: Dataset, num_errors: int
     return collected_errors
 
 
-
-
 def train(
         name: str,
         model_name: str,
@@ -126,8 +96,23 @@ def train(
         learning_rate: float,
         epochs: int,
         seed: int,
+        use_lr_scheduler: bool,
+        warmup_steps: int,
+        num_sched_cycles: float,
         logging: str = "local",
     ):
+
+    if use_lr_scheduler:
+        schedule_info = {
+                "name": "cosine_annealing_with_warmup",
+                "warmup_steps": warmup_steps,
+                "num_cycles": num_sched_cycles
+            }
+    else:
+        schedule_info = {
+            "name": "constant_scheduler",
+            "learning_rate": learning_rate
+        }
 
     wandb.init(
         name=name,
@@ -143,17 +128,20 @@ def train(
             "errors_per_epoch": errors_per_epoch,
             "digits": digits,
             "batch_size": batch_size,
-            "bb_spec": { 
-                "height": bb_spec.height, 
-                "width": bb_spec.width, 
-                "randomize_position": bb_spec.randomize_position, 
-                "operation": bb_spec.operation, 
+            "bb_spec": {
+                "height": bb_spec.height,
+                "width": bb_spec.width,
+                "randomize_position": bb_spec.randomize_position,
+                "operation": bb_spec.operation,
             },
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
             "n_encoder_blocks": n_encoder_blocks,
             "rope_mode": rope_mode,
             "learning_rate": learning_rate,
+            "scheduler": {
+                **schedule_info
+            },
             "epochs": epochs,
             "seed": seed,
         },
@@ -246,6 +234,10 @@ def train(
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
+    if use_lr_scheduler:
+        scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=len(train_loader) * epochs)
+    else:
+        scheduler = get_constant_schedule(optimizer)
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model initialized with {num_params} parameters.")
@@ -268,17 +260,21 @@ def train(
         for step, (x_batch, y_batch) in enumerate(train_loader):
             num_batches += 1
             optimizer.zero_grad()
+            y_batch = y_batch[0] # we only care about the first entry in the tuple
 
             logits, loss = model(x_batch, y_batch)
 
             # Backward pass
             loss.backward()
             optimizer.step()
+            scheduler.step()
+            current_lr = scheduler.get_last_lr()[0]
 
             wandb.log({
                 "epoch": epoch,
                 "step": step,
                 "loss": loss.item(),
+                "lr": current_lr
             })
 
             train_acc += compute_accuracy(logits, y_batch)
@@ -301,6 +297,7 @@ def train(
 
         with torch.no_grad():
             for x_batch, y_batch in test_loader:
+                y_batch = y_batch.to(device)
                 logits, loss = model(x_batch, y_batch)
 
                 test_acc += compute_accuracy(logits, y_batch)
@@ -380,6 +377,9 @@ def main(args):
         epochs=args.epochs,
         seed=args.seed,
         logging=args.logging,
+        use_lr_scheduler=args.use_lr_scheduler,
+        warmup_steps=args.warmup_steps,
+        num_sched_cycles=args.num_sched_cycles
     )
 
 
@@ -410,5 +410,9 @@ if __name__ == "__main__":
     parser.add_argument("--error_correction", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
+    parser.add_argument("--use_lr_scheduler", action="store_true", default=False)
+    parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
+    parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
+
     args = parser.parse_args()
     main(args)

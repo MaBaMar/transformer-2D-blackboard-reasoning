@@ -430,15 +430,9 @@ class TwoDTPERoPEAttention(nn.Module):
 
 
 # -------------------------------------------------------------------
-# TODO: Maybe we can remove everything after this line and move it to
-# TODO: the actual model implementations as it is no longer universal
+# General building blocks
 # -------------------------------------------------------------------
-
-
-# -------------------------------------------------------------------
-# Transformer block
-# -------------------------------------------------------------------
-
+@final
 class FeedForward(nn.Module):
     def __init__(
         self,
@@ -458,6 +452,56 @@ class FeedForward(nn.Module):
         x = self.fc2(x)
         return x
 
+@final
+class OutputHead(nn.Module):
+        def __init__(
+            self,
+            vocab_size: int,
+            d_model: int,
+            pad_id: int,
+        ) -> None:
+            """
+            Converts last hidden state to logits and also computes the loss.
+
+            Args:
+                vocab_size (int): Size of the vocabulary.
+                d_model (int): Dimension of the model.
+                pad_id (int): ID of the padding token.
+            """
+            super().__init__()
+            # building blocks
+            self.ln = nn.LayerNorm(d_model)
+            self.head = nn.Linear(d_model, vocab_size, bias=False)
+            self.pad_id = pad_id
+
+        def forward(
+            self,
+            context: torch.Tensor,
+            targets: Optional[torch.Tensor] = None,
+        ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+
+            h = self.ln(context)
+            logits: torch.Tensor = self.head(h)
+
+            loss: Optional[torch.Tensor] = None
+            if targets is not None:
+                loss = F.cross_entropy(
+                    logits.view(-1, logits.size(-1)),
+                    targets.view(-1),
+                    ignore_index=self.pad_id
+                )
+
+            return logits, loss
+
+
+# -------------------------------------------------------------------
+# TODO: Maybe we can remove everything after this line and move it to
+# TODO: the actual model implementations as it is no longer universal
+# -------------------------------------------------------------------
+
+# -------------------------------------------------------------------
+# Transformer block
+# -------------------------------------------------------------------
 
 class TransformerBlock2DTPE(nn.Module):
     def __init__(

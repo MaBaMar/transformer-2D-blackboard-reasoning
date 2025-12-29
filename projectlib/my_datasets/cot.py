@@ -16,9 +16,9 @@ TRAIN_PATH = "datasets/scratchpads_train.pt"
 
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
-class ScratchpadDataset(GeneratedDataset):
+class CoTDataset(GeneratedDataset):
     """
-    Dataset containing prompts that induce a chain of thought approach that is based on scratchpads.
+    Dataset containing prompts that induce a chain of thought approach that is similar to scratchpads.
 
     Parameters:
         path (str, optional): Path to store/load the dataset. Defaults to train or eval path.
@@ -128,7 +128,7 @@ class ScratchpadDataset(GeneratedDataset):
         d_b = get_digits(b, n)
 
         # Generate scratchpad line by line
-        scratchpad = f"{num_to_str(a, n)} {self.operand} {num_to_str(b, n)} , C: 0\n"
+        scratchpad = f""
 
         result = []
         prev_carry = 0
@@ -137,8 +137,8 @@ class ScratchpadDataset(GeneratedDataset):
             line, prev_carry = self._generate_line(
                 prev_carry=prev_carry,
                 result=result,
-                d_a=d_a[:n - i + 1],
-                d_b=d_b[:n - i + 1],
+                curr_a=d_a[n - i],
+                curr_b=d_b[n - i],
             )
             scratchpad += line
 
@@ -156,22 +156,19 @@ class ScratchpadDataset(GeneratedDataset):
         )
 
 
-    def _generate_line(self, prev_carry: int, result: list[int], d_a: list[int], d_b: list[int]) -> tuple[str, int]:
+    def _generate_line(self, prev_carry: int, result: list[int], curr_a: int, curr_b: int) -> tuple[str, int]:
         """Generate the next line of the scratchpad"""
-
-        left_a = digits_to_str(d_a[:-1])
-        left_b = digits_to_str(d_b[:-1])
-        curr_a = d_a[-1]
-        curr_b = d_b[-1]
 
         # Compute result of current two digits
         if self.operand == "+":
             curr_digits = get_digits(curr_a + curr_b + prev_carry)
+            operation = f"{curr_a} + {curr_b} + {prev_carry}" if prev_carry else f"{curr_a} + {curr_b}"
         elif self.operand == "-":
             borrow = curr_a < curr_b + prev_carry
             curr_digits = [1] + get_digits((10 + curr_a) - (curr_b + prev_carry)) if borrow else get_digits(curr_a - (curr_b + prev_carry))
+            operation = f"1{curr_a} - ({curr_b} + {prev_carry})" if borrow else f"{curr_a} - ({curr_b} + {prev_carry})"
         else:
-            NotImplementedError()
+            raise NotImplementedError()
 
         # Add current digit to result
         curr_digit = curr_digits[-1]
@@ -180,25 +177,7 @@ class ScratchpadDataset(GeneratedDataset):
         # Compute the carry
         carry = 1 if len(curr_digits) > 1 else 0
 
-        # Generate the operation
-        operation = f"{left_a} {self.operand} {left_b} " if left_a and left_b else ""
-
-        # Generate the comment
-        if self.operand == "+":
-            if prev_carry:
-                comment = f"# added {curr_a} + {curr_b} + 1 = {curr_digit} carry {carry}"
-            else:
-                comment = f"# added {curr_a} + {curr_b} = {curr_digit} carry {carry}"
-        elif self.operand == "-":
-            borrowed_a = (10 + curr_a) if borrow else curr_a
-            if prev_carry:
-                comment = f"# subtracted {curr_b} + {prev_carry} + {curr_digit} = {borrowed_a} carry {carry}"
-            else:
-                comment = f"# subtracted {curr_b} + {curr_digit} = {borrowed_a} carry {carry}"
-        else:
-            raise NotImplementedError()
-
         # Generate the line
-        line = f"{operation}, {digits_to_str(result)} C: {carry} {comment}\n"
+        line = f"{operation}, {digits_to_str(result)} carry: {carry}\n"
 
         return line, carry

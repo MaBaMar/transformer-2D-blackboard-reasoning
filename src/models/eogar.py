@@ -18,33 +18,10 @@
 
 from typing import Optional, final, Tuple, List
 import torch
-import math
 from torch import nn
-import torch.nn.functional as F
 
-from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention
+from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention, FeedForward, OutputHead
 from projectlib.wrappertypes import BBChainGenerator
-
-
-class FeedForward(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        hidden_dim: int,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(d_model, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, d_model)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc1(x)
-        x = F.gelu(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
-
 
 @final  # affects typechecker only
 class Encoder(nn.Module):
@@ -81,7 +58,7 @@ class Encoder(nn.Module):
         targets: [B,L] or None
         """
 
-        x = self.tok_emb(input_ids)  # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
+        x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.dropout(x)
 
         ent_losses: List[torch.Tensor] = []
@@ -141,39 +118,6 @@ class Encoder(nn.Module):
             return x, ent_loss
 
 
-class Head(nn.Module):
-    def __init__(
-        self,
-        vocab_size: int,
-        d_model: int,
-        pad_id: int,
-    ) -> None:
-        super().__init__()
-        # building blocks
-        self.ln = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
-        self.pad_id = pad_id
-
-    def forward(
-        self,
-        context: torch.Tensor,
-        targets: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-
-        h = self.ln(context)
-        logits = self.head(h)
-
-        loss: Optional[torch.Tensor] = None
-        if targets is not None:
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                targets.view(-1),
-                ignore_index=self.pad_id
-            )
-
-        return logits, loss
-
-
 class EOgar(BBChainGenerator):
     def __init__(
         self,
@@ -214,7 +158,7 @@ class EOgar(BBChainGenerator):
             num_blocks=n_encoder_blocks
         )
 
-        self.head = Head(
+        self.head = OutputHead(
             vocab_size=vocab_size,
             d_model=d_model,
             pad_id=pad_id,
