@@ -49,15 +49,15 @@ def compute_accuracy_pt(logits, labels):
 
 
 class ErrorDataset(Dataset):
-    def __init__(self, error_list):
+    def __init__(self, error_list: list):
         self.error_list = error_list
-    def __len__(self):
+    def __len__(self)-> int:
         return len(self.error_list)
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int)-> object:
         return self.error_list[idx]
 
 
-def construct_train_loader(gold_set: Dataset, collected_errors: torch.Tensor, batch_size: int, collate_fn):
+def construct_train_loader(gold_set: Dataset, collected_errors: list, batch_size: int, collate_fn: callable) -> DataLoader:
 
     if not collected_errors:
         return DataLoader(gold_set, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
@@ -74,7 +74,7 @@ def construct_train_loader(gold_set: Dataset, collected_errors: torch.Tensor, ba
     )
 
 
-def collect_error_samples(model, error_pool_set, collate_fn, num_errors, batch_size):
+def collect_error_samples(model: EOgar, error_pool_set: Dataset, num_errors: int, batch_size: int, collate_fn: callable) -> list:
     model.eval()
     collected_errors = []
 
@@ -100,7 +100,7 @@ def collect_error_samples(model, error_pool_set, collate_fn, num_errors, batch_s
                 if not correct:
                     collected_errors.append(batch_items[i])
                     if len(collected_errors) >= num_errors:
-                        return collected_errors
+                        return collected_errors[:num_errors]
 
     return collected_errors
 
@@ -114,8 +114,7 @@ def train(
         test_size: int,
         eval_size: int,
         error_correction: bool,
-        gold_size: int,
-        error_pool_size: int,
+        error_pool_fraction: float,
         errors_per_epoch: int,
         digits: int,
         batch_size: int,
@@ -140,8 +139,7 @@ def train(
             "test_size": test_size,
             "eval_size": eval_size,
             "error_correction": error_correction,
-            "gold_size": gold_size,
-            "error_pool_size": error_pool_size,
+            "error_pool_fraction": error_pool_fraction,
             "errors_per_epoch": errors_per_epoch,
             "digits": digits,
             "batch_size": batch_size,
@@ -165,16 +163,12 @@ def train(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    if error_correction:
-        total_train_size = gold_size + error_pool_size
-    else:
-        total_train_size = train_size
 
     spec = GenerationSpec.digits(
         digits=digits,
         eval_size=eval_size,
         test_size=test_size,
-        train_size=total_train_size,
+        train_size=train_size,
     )
 
     bb_full_dataset_train = TokenizedBlackboardDataset(
@@ -201,6 +195,9 @@ def train(
     collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=pad_id, device=device)
 
     if error_correction:
+        error_pool_size = int(train_size * error_pool_fraction)
+        gold_size = train_size - error_pool_size
+
         train_nums = bb_full_dataset_train.train_nums
         gold_problems = train_nums[:gold_size]
         error_pool_problems = train_nums[gold_size:gold_size + error_pool_size]
@@ -344,8 +341,7 @@ def train(
             "epochs": epochs,
             "train_size": train_size,
             "error_correction": error_correction,
-            "gold_size": gold_size,
-            "error_pool_size": error_pool_size,
+            "error_pool_fraction": error_pool_fraction,
             "errors_per_epoch": errors_per_epoch,
             "digits": digits,
             "seed": seed,
@@ -372,8 +368,7 @@ def main(args):
         test_size=args.test_size,
         eval_size=args.eval_size,
         error_correction=args.error_correction,
-        gold_size=args.gold_size,
-        error_pool_size=args.error_pool_size,
+        error_pool_fraction=args.error_pool_fraction,
         errors_per_epoch=args.errors_per_epoch,
         batch_size=args.batch_size,
         bb_spec=bb_spec,
@@ -394,27 +389,26 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.DEBUG)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", type=str)
-    parser.add_argument("--model_name", type=str)
-    parser.add_argument("--digits", type=int)
-    parser.add_argument("--train_size", type=int)
-    parser.add_argument("--test_size", type=int)
-    parser.add_argument("--eval_size", type=int)
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--bb_height", type=int)
-    parser.add_argument("--bb_width", type=int)
-    parser.add_argument("--bb_randomize_position", action="store_true")
-    parser.add_argument("--model_dimension", type=int)
-    parser.add_argument("--num_heads_encoder", type=int)
-    parser.add_argument("--n_encoder_blocks", type=int)
-    parser.add_argument("--rope_mode", type=str)
-    parser.add_argument("--learning_rate", type=float)
-    parser.add_argument("--epochs", type=int)
-    parser.add_argument("--gold_size", type=int)
-    parser.add_argument("--error_pool_size", type=int)
-    parser.add_argument("--errors_per_epoch", type=int)
+    parser.add_argument("--name", type=str, default="eogar_experiment")
+    parser.add_argument("--model_name", type=str, default="eogar")
+    parser.add_argument("--digits", type=int, default=2)
+    parser.add_argument("--train_size", type=int, default=10)
+    parser.add_argument("--test_size", type=int, default=10)
+    parser.add_argument("--eval_size", type=int, default=10)
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--bb_height", type=int, default=10)
+    parser.add_argument("--bb_width", type=int, default=10)
+    parser.add_argument("--bb_randomize_position", action="store_true", default=False)
+    parser.add_argument("--model_dimension", type=int, default=8)
+    parser.add_argument("--num_heads_encoder", type=int, default=1)
+    parser.add_argument("--n_encoder_blocks", type=int, default=1)
+    parser.add_argument("--rope_mode", type=str, default="2d")
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--error_pool_fraction", type=float, default=0.2)
+    parser.add_argument("--errors_per_epoch", type=int, default=100)
     parser.add_argument("--error_correction", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
-    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
     main(args)
