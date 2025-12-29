@@ -50,7 +50,7 @@ class Encoder(nn.Module):
         pos_row: torch.Tensor,
         pos_col: torch.Tensor,
         key_padding_mask: torch.Tensor | None = None
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         input_ids: [B,L]
         pos_row, pos_col: [B,L]
@@ -61,50 +61,20 @@ class Encoder(nn.Module):
         x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.dropout(x)
 
-        for layer in self.transformer_blocks:
-            x = layer(
-                x,
-                pos_row=pos_row,
-                pos_col=pos_col,
-                key_padding_mask=key_padding_mask,
-            )
-
-        return x
-
-    # --- NEW (minimal addition): entropy-collecting forward ---
-    def forward_with_entropy(
-        self,
-        input_ids: torch.Tensor,
-        pos_row: torch.Tensor,
-        pos_col: torch.Tensor,
-        key_padding_mask: torch.Tensor | None = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Same as forward(), but also aggregates ent_loss from attention blocks.
-
-        Returns:
-            context: [B,L,d_model]
-            ent_loss_total: scalar tensor (mean over blocks), or None if no entropy was produced.
-        """
-        x = self.tok_emb(input_ids)  # keep exact embedding behavior
-        x = self.dropout(x)
-
         ent_losses: List[torch.Tensor] = []
 
         for layer in self.transformer_blocks:
-            x, ent_l = layer.forward_with_entropy(
+            x, ent_l = layer(
                 x,
                 pos_row=pos_row,
                 pos_col=pos_col,
                 key_padding_mask=key_padding_mask,
             )
             if ent_l is not None:
-                # ensure scalar-ish (in case attention returns per-head/per-token values)
                 ent_losses.append(ent_l.mean())
 
         ent_loss_total: Optional[torch.Tensor] = None
         if len(ent_losses) > 0:
-            # mean across blocks so scale doesn't grow with depth
             ent_loss_total = torch.stack(ent_losses).mean()
 
         return x, ent_loss_total
@@ -132,45 +102,12 @@ class Encoder(nn.Module):
             pos_row: torch.Tensor,
             pos_col: torch.Tensor,
             key_padding_mask: torch.Tensor | None = None,
-        ) -> torch.Tensor:
-            # pre-norm + attention
-            h = self.ln1(x)
-
-            # TwoDTPERoPEAttention may return either:
-            #   - out
-            #   - (out, ent_loss)
-            attn_out = self.attn(h, pos_row, pos_col, key_padding_mask=key_padding_mask)
-            if isinstance(attn_out, tuple):
-                h_attn = attn_out[0]
-            else:
-                h_attn = attn_out
-
-            x = x + self.dropout(h_attn)
-
-            # pre-norm + FFN
-            h2 = self.ln2(x)
-            h2 = self.ffn(h2)
-            x = x + self.dropout(h2)
-
-            return x
-
-        # --- NEW (minimal addition): entropy-producing forward ---
-        def forward_with_entropy(
-            self,
-            x: torch.Tensor,
-            pos_row: torch.Tensor,
-            pos_col: torch.Tensor,
-            key_padding_mask: torch.Tensor | None = None,
         ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
             # pre-norm + attention
             h = self.ln1(x)
 
-            attn_out = self.attn(h, pos_row, pos_col, key_padding_mask=key_padding_mask)
-            if isinstance(attn_out, tuple):
-                h_attn, ent_loss = attn_out
-            else:
-                h_attn, ent_loss = attn_out, None
-
+            h_attn, ent_loss = self.attn(h, pos_row, pos_col, key_padding_mask=key_padding_mask)
+            
             x = x + self.dropout(h_attn)
 
             # pre-norm + FFN
@@ -277,21 +214,14 @@ class EOgar(BBChainGenerator):
         # --- NEW: decide whether to collect entropy ---
         collect_entropy = bool(self.training and (self.entropy_coef > 0.0))
 
-        if collect_entropy:
-            # IMPORTANT for entropy correctness: pass key_padding_mask so PAD doesn't contribute.
-            context, ent_loss = self.encoder.forward_with_entropy(
-                input_ids=x_tokens,
-                pos_row=x_pos_row,
-                pos_col=x_pos_col,
-                key_padding_mask=x_key_padding_mask,
-            )
-        else:
-            context = self.encoder(
-                input_ids=x_tokens,
-                pos_row=x_pos_row,
-                pos_col=x_pos_col,
-                key_padding_mask=x_key_padding_mask,
-            )
+        context, ent_loss = self.encoder(
+            input_ids=x_tokens,
+            pos_row=x_pos_row,
+            pos_col=x_pos_col,
+            key_padding_mask=x_key_padding_mask,
+        )
+
+        if not collect_entropy:
             ent_loss = None
 
         logits, loss = self.head(
@@ -340,7 +270,7 @@ class EOgar(BBChainGenerator):
             x_pos_col = x_seq_idx
 
         # No entropy collection during inference
-        context = self.encoder(
+        context, _ = self.encoder(
             input_ids=x_tokens,
             pos_row=x_pos_row,
             pos_col=x_pos_col,
