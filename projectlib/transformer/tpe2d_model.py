@@ -20,7 +20,7 @@
 #
 # ------------------------------------------------------------
 
-# NOTE: Entropy regularization is missing.
+# NOTE: Entropy regularization is implemented (enable via entropy_coef).
 # NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
 import math
@@ -84,7 +84,7 @@ class RoPECache(nn.Module):
 
         # positions 0, 1, ..., max_position-1
         t = torch.arange(max_position, device=device, dtype=self.inv_freq.dtype)  # [max_position]
-        # couldn't get rid of type problems here
+        # couldn't get rid of type problems here
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # [max_position, head_dim/2]
         emb = torch.repeat_interleave(freqs, 2, dim=-1)  # [max_position, head_dim]
 
@@ -146,7 +146,6 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
 
 def apply_rope(
     qk_tensor: torch.Tensor,
-    #k: torch.Tensor,
     positions: torch.Tensor,
     cos: torch.Tensor,
     sin: torch.Tensor,
@@ -280,7 +279,7 @@ class TwoDTPERoPEAttention(nn.Module):
             # sort padding mask the same way as key and query
             attn_mask = torch.gather(key_padding_mask, 1, k_sort_idx).unsqueeze(1).unsqueeze(2).bool() # [B,1,1,L_k]
         else:
-            attn_mask = torch.zeros((B, 1, 1, L_k),device=device, dtype=torch.bool)
+            attn_mask = torch.zeros((B, 1, 1, L_k), device=device, dtype=torch.bool)
 
         if self.use_causal_mask:
             # time indices (represents the time of token generation) for causal masking in a row-major fashion
@@ -316,7 +315,7 @@ class TwoDTPERoPEAttention(nn.Module):
         context_pos_row: Optional[torch.Tensor] = None,
         context_pos_col: Optional[torch.Tensor] = None,
         key_padding_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Forward pass of the Transformer 2D model. CAREFUL: The key_padding_mask is 1 if a token should be ignored and 0 otherwise
 
@@ -331,6 +330,7 @@ class TwoDTPERoPEAttention(nn.Module):
             context_pos_col (Optional[torch.Tensor]): Column position tensor for context of shape [B, L_ctx] with integer indices.
         Returns:
             torch.Tensor: Attention result tensor of shape [B, L, d_model].
+            Optional[torch.Tensor]: Entropy auxiliary loss for router distribution.
         """
 
         B, L, _ = hidden_states.shape
@@ -341,7 +341,6 @@ class TwoDTPERoPEAttention(nn.Module):
             kv_pos_row = pos_row
             kv_pos_col = pos_col
             kv_B, kv_L, _ = hidden_states.shape
-
         else:
             # cross-attention modification
             kv_input = context
@@ -357,14 +356,20 @@ class TwoDTPERoPEAttention(nn.Module):
         k = k.view(kv_B, kv_L, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(kv_B, kv_L, self.num_heads, self.head_dim).transpose(1, 2)
 
-
-        max_pos = int(max(kv_pos_row.max().item(), kv_pos_col.max().item(), pos_row.max().item(), pos_col.max().item(),)) + 1
+        max_pos = int(
+            max(
+                kv_pos_row.max().item(),
+                kv_pos_col.max().item(),
+                pos_row.max().item(),
+                pos_col.max().item(),
+            )
+        ) + 1
         # build / reuse RoPE cache up to max position we see in either order
         cos, sin = self.rope_cache(
             max_position=max_pos,
             device=device,
-            dtype=q.dtype,)
-
+            dtype=q.dtype,
+        )
 
         # Apply RoPE for all four positions (4 instead of 2 cals because kv_pos_row does not have to be the same as pos_row)
         q_row = apply_rope(q, pos_row, cos, sin)
@@ -382,11 +387,36 @@ class TwoDTPERoPEAttention(nn.Module):
         # router: per-head, per-token logits over {row, col}
         # use a per-head view of the *input hidden state* (before Q/K/V projections)
         # q: [B,H,L,D_head]
-        router_in = hidden_states.view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
+        router_in = hidden_states.contiguous().view(B, L, self.num_heads, self.head_dim).transpose(1, 2)
 
         router_h = F.silu(self.router_up(router_in))      # [B,H,L,4*D_head]
         router_logits = self.router_down(router_h)        # [B,H,L,2]
+
+        # router_weights is a distribution over the two orders, so we need softmax here
         router_weights = F.softmax(router_logits, dim=-1) # [B,H,L,2]
+
+        # ---- entropy auxiliary loss (paper Eq. 13-15) ----
+        # One small numerical improvement (worth doing):
+        # entropy should be computed via log_softmax for stability.
+        ent_loss: Optional[torch.Tensor] = None
+        if self.training:
+            logp = F.log_softmax(router_logits, dim=-1)   # [B,H,L,2]
+            p = logp.exp()
+            entropy = -(p * logp).sum(dim=-1)            # [B,H,L]
+
+            if key_padding_mask is not None and context is None:
+                # mask out padded *query* positions (True where padded)
+                valid = (~key_padding_mask).unsqueeze(1)  # [B,1,L]
+                valid = valid.expand_as(entropy)          # [B,H,L]
+                denom = valid.sum()
+
+                if denom.item() == 0:
+                    ent_loss = entropy.new_tensor(0.0)
+                else:
+                    ent_loss = (entropy * valid).sum() / denom
+            else:
+                ent_loss = entropy.mean()
+        # -----------------------------------------------
 
         w_row = router_weights[..., 0].unsqueeze(-1)      # [B,H,L,1]
         w_col = router_weights[..., 1].unsqueeze(-1)
@@ -396,7 +426,7 @@ class TwoDTPERoPEAttention(nn.Module):
         # merge heads
         out = out_heads.transpose(1, 2).contiguous().view(B, L, self.d_model)
         out = self.o_proj(out)  # [B,L,D_model]
-        return out
+        return out, ent_loss
 
 
 # -------------------------------------------------------------------
@@ -446,7 +476,7 @@ class TransformerBlock2DTPE(nn.Module):
         )
 
         self.ln2 = nn.LayerNorm(d_model)
-        self.ffn = FeedForward( d_model=d_model, hidden_dim=4 * d_model,dropout=dropout,)
+        self.ffn = FeedForward(d_model=d_model, hidden_dim=4 * d_model, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
 
     def forward(
@@ -455,18 +485,22 @@ class TransformerBlock2DTPE(nn.Module):
         pos_row: torch.Tensor,
         pos_col: torch.Tensor,
         key_padding_mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         # pre-norm + attention
         h = self.ln1(x)
-        h = self.attn(h, pos_row=pos_row, pos_col=pos_col,
-                      key_padding_mask=key_padding_mask)
-        x = x + self.dropout(h)
+        h_attn, ent_loss = self.attn(
+            h,
+            pos_row=pos_row,
+            pos_col=pos_col,
+            key_padding_mask=key_padding_mask,
+        )
+        x = x + self.dropout(h_attn)
 
         # pre-norm + FFN
         h2 = self.ln2(x)
         h2 = self.ffn(h2)
         x = x + self.dropout(h2)
-        return x
+        return x, ent_loss
 
 
 # -------------------------------------------------------------------
@@ -481,14 +515,19 @@ class CausalTransformer2DTPE(nn.Module):
         num_layers: int = 4,
         num_heads: int = 4,
         dropout: float = 0.1,
+        entropy_coef: float = 0.0,
     ) -> None:
         super().__init__()
         self.d_model = d_model
+        self.entropy_coef = entropy_coef
+
         self.tok_emb = nn.Embedding(vocab_size, d_model)
         self.drop = nn.Dropout(dropout)
 
-        self.layers = nn.ModuleList([TransformerBlock2DTPE(d_model=d_model,num_heads=num_heads,
-                                                             dropout=dropout,) for _ in range(num_layers) ])
+        self.layers = nn.ModuleList([
+            TransformerBlock2DTPE(d_model=d_model, num_heads=num_heads, dropout=dropout)
+            for _ in range(num_layers)
+        ])
 
         self.ln_f = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab_size, bias=False)
@@ -500,7 +539,7 @@ class CausalTransformer2DTPE(nn.Module):
         pos_col: torch.Tensor,
         key_padding_mask: Optional[torch.Tensor] = None,
         targets: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         """
         input_ids: [B,L]
         pos_row, pos_col: [B,L]
@@ -508,28 +547,39 @@ class CausalTransformer2DTPE(nn.Module):
         targets: [B,L] or None
         """
 
-        x = self.tok_emb(input_ids) # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
+        x = self.tok_emb(input_ids)  # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
         x = self.drop(x)
 
+        ent_losses = []
+
         for layer in self.layers:
-            x = layer(
+            x, ent_l = layer(
                 x,
                 pos_row=pos_row,
                 pos_col=pos_col,
                 key_padding_mask=key_padding_mask,
             )
+            if (targets is not None) and (self.entropy_coef > 0.0) and (ent_l is not None):
+                ent_losses.append(ent_l)
 
         x = self.ln_f(x)
         logits = self.head(x)  # [B,L,vocab]
 
         loss: Optional[torch.Tensor] = None
+        ent_loss_total: Optional[torch.Tensor] = None
         if targets is not None:
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)),
                 targets.view(-1),
                 ignore_index=-100,
             )
-        return logits, loss
+
+            if self.entropy_coef > 0.0 and len(ent_losses) > 0:
+                # average across layers to keep scale stable as you change depth
+                ent_loss_total = torch.stack(ent_losses).mean()
+                loss = loss + self.entropy_coef * ent_loss_total
+
+        return logits, loss, ent_loss_total
 
     @torch.no_grad()
     def generate(
@@ -558,7 +608,7 @@ class CausalTransformer2DTPE(nn.Module):
 
         for _ in range(max_new_tokens):
             key_padding_mask = (out_ids == pad_id)
-            logits, _ = self.forward(
+            logits, _, _ = self.forward(
                 out_ids,
                 pos_row=row,
                 pos_col=col,
