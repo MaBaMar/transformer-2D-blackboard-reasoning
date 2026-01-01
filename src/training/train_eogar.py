@@ -54,19 +54,19 @@ def collect_error_samples(model: EOgar, error_pool_set: Dataset, num_errors: int
 
     with torch.no_grad():
         for batch_items in loader:
-            
+
             x_collated, y_collated = collate_fn(batch_items)
-            
+
             logits, _ = model(x_collated, y_collated)
             preds = logits.argmax(dim=-1)
-            
+
             target_tokens = y_collated[0]
 
             if target_tokens.shape != preds.shape:
                 continue
 
 
-            is_correct = (preds == target_tokens).all(dim=1) 
+            is_correct = (preds == target_tokens).all(dim=1)
 
             for i, correct in enumerate(is_correct):
                 if not correct:
@@ -195,7 +195,7 @@ def train(
             len_a = int(np.floor(np.log10(a))) + 1 if a > 0 else 1
             len_b = int(np.floor(np.log10(b))) + 1 if b > 0 else 1
             gold_sample_count += max(len_a, len_b) + 2
-            
+
         error_pool_sample_count = 0
         for a, b in error_pool_problems:
             len_a = int(np.floor(np.log10(a))) + 1 if a > 0 else 1
@@ -216,7 +216,7 @@ def train(
             shuffle=True,
             collate_fn=collate_fn
         )
-    
+
     test_loader = DataLoader(
         bb_dataset_test,
         batch_size=batch_size,
@@ -259,8 +259,7 @@ def train(
 
         for step, (x_batch, y_batch) in enumerate(train_loader):
             num_batches += 1
-            optimizer.zero_grad()
-            y_batch = y_batch[0] # we only care about the first entry in the tuple
+            optimizer.zero_grad() # we only care about the first entry in the tuple
 
             logits, loss = model(x_batch, y_batch)
 
@@ -277,10 +276,10 @@ def train(
                 "lr": current_lr
             })
 
-            train_acc += compute_accuracy(logits, y_batch)
-            train_acc_pt += compute_accuracy_pt(logits, y_batch)
+            train_acc += compute_accuracy(logits, y_batch[0])
+            train_acc_pt += compute_accuracy_pt(logits, y_batch[0])
             train_loss += loss.item()
-        
+
         print(f"Epoch {epoch}: Processed {num_batches} batches.")
 
         train_acc /= len(train_loader)
@@ -297,11 +296,10 @@ def train(
 
         with torch.no_grad():
             for x_batch, y_batch in test_loader:
-                y_batch = y_batch.to(device)
                 logits, loss = model(x_batch, y_batch)
 
-                test_acc += compute_accuracy(logits, y_batch)
-                test_acc_pt += compute_accuracy_pt(logits, y_batch)
+                test_acc += compute_accuracy(logits, y_batch[0])
+                test_acc_pt += compute_accuracy_pt(logits, y_batch[0])
                 test_loss += loss.item()
 
         test_acc /= len(test_loader)
