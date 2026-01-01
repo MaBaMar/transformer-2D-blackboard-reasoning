@@ -12,6 +12,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, ConcatDataset
 from logging import getLogger, basicConfig, DEBUG
 from tqdm import tqdm
+from math import ceil
 
 from transformers.optimization import get_constant_schedule, get_cosine_schedule_with_warmup
 import wandb
@@ -128,11 +129,12 @@ def train(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    scale_factor = len(_SP_OP_REGISTRY) if operation == "mixed" else 1
     spec = GenerationSpec.digits(
         digits=digits,
-        eval_size=eval_size,
-        test_size=test_size,
-        train_size=train_size,
+        eval_size=ceil(eval_size / scale_factor),
+        test_size=ceil(test_size / scale_factor),
+        train_size=ceil(train_size / scale_factor),
     )
 
     _datacls = _DATA_T_REGISTRY[dataset_variant]
