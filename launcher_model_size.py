@@ -10,7 +10,7 @@ MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 10
+NUM_SEEDS = 1
 
 #
 #   Model parameters and corresponding sizes
@@ -18,37 +18,42 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [4, 8, 12],
-    "train_sizes": [4096],
+    "digits": [12],
+    "train_sizes": [8192],
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
-        # Vary encoder blocks
-        { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
-        { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # Finalists
         { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
         { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
-        
-        { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
         { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-d64-h4-b16", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+
+        # Vary encoder blocks
+        # { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        # { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
+        
+        # { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d64-h4-b16", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
 
         # Vary number of heads
-        { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
-        { "model_name": "EOgar-d32-h16-b4", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
-        { "model_name": "EOgar-d32-h32-b4", "model_dimension": 32, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
-        { "model_name": "EOgar-d32-h64-b4", "model_dimension": 32, "num_heads_encoder": 64, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h16-b4", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h32-b4", "model_dimension": 32, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h64-b4", "model_dimension": 32, "num_heads_encoder": 64, "n_encoder_blocks": 4 },
         
-        { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
-        { "model_name": "EOgar-d64-h16-b4", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
-        { "model_name": "EOgar-d64-h32-b4", "model_dimension": 64, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h16-b4", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h32-b4", "model_dimension": 64, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
 
         # Vary both
-        { "model_name": "EOgar-d32-h8-b8", "model_dimension": 32, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-d32-h16-b16", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
+        # { "model_name": "EOgar-d32-h8-b8", "model_dimension": 32, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d32-h16-b16", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
 
-        { "model_name": "EOgar-d64-h8-b8", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-d64-h16-b16", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
+        # { "model_name": "EOgar-d64-h8-b8", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d64-h16-b16", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
     ],
     "bb_specs": [
         { "height": 8, "width": 16, "randomize_position": "false", "operation": "addition" },
@@ -56,7 +61,7 @@ applicable_configs = {
     ],
     "rope_mode": ["2d"],
     "learning_rate": [1e-3],
-    "epochs": [8],
+    "epochs": [10],
 }
 
 def main(args):

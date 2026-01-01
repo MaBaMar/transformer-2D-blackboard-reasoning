@@ -115,44 +115,8 @@ def train(
             "learning_rate": learning_rate
         }
 
-    wandb.init(
-        name=name,
-        entity="blackboard-reasoning",
-        project="blackboard-reasoning",
-        config={
-            "model": model_name,
-            "train_size": train_size,
-            "test_size": test_size,
-            "eval_size": eval_size,
-            "error_correction": error_correction,
-            "error_pool_fraction": error_pool_fraction,
-            "errors_per_epoch": errors_per_epoch,
-            "digits": digits,
-            "batch_size": batch_size,
-            "bb_spec": {
-                "height": bb_spec.height,
-                "width": bb_spec.width,
-                "randomize_position": bb_spec.randomize_position,
-                "operation": bb_spec.operation,
-            },
-            "model_dimension": model_dimension,
-            "num_heads_encoder": num_heads_encoder,
-            "n_encoder_blocks": n_encoder_blocks,
-            "rope_mode": rope_mode,
-            "learning_rate": learning_rate,
-            "entropy_coef": entropy_coef,
-            "scheduler": {
-                **schedule_info
-            },
-            "epochs": epochs,
-            "seed": seed,
-        },
-        mode="online" if logging == "wandb" else "offline"
-    )
-
     torch.manual_seed(seed)
     np.random.seed(seed)
-
 
     spec = GenerationSpec.digits(
         digits=digits,
@@ -244,6 +208,42 @@ def train(
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model initialized with {num_params} parameters.")
+
+    wandb.init(
+        name=name,
+        entity="blackboard-reasoning",
+        project="blackboard-reasoning",
+        config={
+            "model": model_name,
+            "train_size": train_size,
+            "test_size": test_size,
+            "eval_size": eval_size,
+            "error_correction": error_correction,
+            "error_pool_fraction": error_pool_fraction,
+            "errors_per_epoch": errors_per_epoch,
+            "digits": digits,
+            "batch_size": batch_size,
+            "bb_spec": {
+                "height": bb_spec.height,
+                "width": bb_spec.width,
+                "randomize_position": bb_spec.randomize_position,
+                "operation": bb_spec.operation,
+            },
+            "model_dimension": model_dimension,
+            "num_heads_encoder": num_heads_encoder,
+            "n_encoder_blocks": n_encoder_blocks,
+            "model_size": num_params,
+            "rope_mode": rope_mode,
+            "learning_rate": learning_rate,
+            "entropy_coef": entropy_coef,
+            "scheduler": {
+                **schedule_info
+            },
+            "epochs": epochs,
+            "seed": seed,
+        },
+        mode="online" if logging == "wandb" else "offline"
+    )
 
     for epoch in tqdm(range(epochs)):
 
