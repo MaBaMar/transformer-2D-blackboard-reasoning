@@ -94,6 +94,7 @@ def train(
         n_encoder_blocks: int,
         rope_mode: str,
         learning_rate: float,
+        entropy_coef: float,
         epochs: int,
         seed: int,
         use_lr_scheduler: bool,
@@ -139,6 +140,7 @@ def train(
             "n_encoder_blocks": n_encoder_blocks,
             "rope_mode": rope_mode,
             "learning_rate": learning_rate,
+            "entropy_coef": entropy_coef,
             "scheduler": {
                 **schedule_info
             },
@@ -231,6 +233,7 @@ def train(
         n_encoder_blocks=n_encoder_blocks,
         pad_id=pad_id,
         rope_mode=rope_mode,
+        entropy_coef=entropy_coef,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
@@ -270,12 +273,19 @@ def train(
             scheduler.step()
             current_lr = scheduler.get_last_lr()[0]
 
-            wandb.log({
+            # --- MONITORING UPDATE START ---
+            log_dict = {
                 "epoch": epoch,
                 "step": step,
                 "loss": loss.item(),
                 "lr": current_lr
-            })
+            }
+            # Check if model has the entropy loss attribute and log it if present
+            if getattr(model, "last_ent_loss", None) is not None:
+                log_dict["entropy_loss"] = model.last_ent_loss.item()
+            
+            wandb.log(log_dict)
+            # --- MONITORING UPDATE END ---
 
             train_acc += compute_accuracy(logits, y_batch)
             train_acc_pt += compute_accuracy_pt(logits, y_batch)
@@ -349,6 +359,7 @@ def train(
             "error_pool_fraction": error_pool_fraction,
             "errors_per_epoch": errors_per_epoch,
             "seed": seed,
+            "entropy_coef": entropy_coef,
             "vocab_size": vocab_size,
             "pad_id": pad_id,
         }
@@ -392,6 +403,7 @@ def main(args):
         n_encoder_blocks=args.n_encoder_blocks,
         rope_mode=args.rope_mode,
         learning_rate=args.learning_rate,
+        entropy_coef=args.entropy_coef,
         epochs=args.epochs,
         seed=args.seed,
         logging=args.logging,
@@ -423,6 +435,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_encoder_blocks", type=int)
     parser.add_argument("--rope_mode", type=str)
     parser.add_argument("--learning_rate", type=float)
+    parser.add_argument("--entropy_coef", type=float, default=0.0)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--error_pool_fraction", type=float)
     parser.add_argument("--errors_per_epoch", type=int)
