@@ -20,7 +20,7 @@
 #
 # ------------------------------------------------------------
 
-# NOTE: Entropy regularization is missing.
+# NOTE: Entropy regularization is now enabled via entropy_coef.
 # NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
 # TODO: move somewhere else, should not be in the library
@@ -29,8 +29,7 @@ from typing import List, Dict, Tuple, Optional, Callable
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 from tpe2d_data import SimpleVocab, Grid2DDataset, collate_grid_batch, make_toy_grids
 from tpe2d_model import CausalTransformer2DTPE
@@ -49,6 +48,9 @@ class TrainConfig:
     lr: float = 3e-4
     steps: int = 200
     device: str = "cpu"   # "cuda" / "mps" if available
+
+    # Entropy regularization weight (paper Eq. 13-15: L = L_nll + lambda * L_ent)
+    entropy_coef: float = 1e-3
 
 
 def main() -> None:
@@ -77,6 +79,7 @@ def main() -> None:
         num_layers=cfg.num_layers,
         num_heads=cfg.num_heads,
         dropout=0.1,
+        entropy_coef=cfg.entropy_coef,
     ).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
@@ -91,7 +94,8 @@ def main() -> None:
             pos_col = pos_col.to(device)
             key_padding_mask = key_padding_mask.to(device)
 
-            _, loss = model(
+            # Model returns: logits, total_loss, entropy_loss (entropy_loss may be None if disabled)
+            _, loss, ent_loss = model(
                 input_ids=input_ids,
                 pos_row=pos_row,
                 pos_col=pos_col,
@@ -106,7 +110,8 @@ def main() -> None:
 
             step += 1
             if step % 50 == 0:
-                print(f"step {step:4d} | loss {loss.item():.4f}")
+                ent_val = ent_loss.item() if ent_loss is not None else 0.0
+                print(f"step {step:4d} | loss {loss.item():.4f} | ent {ent_val:.4f}")
             if step >= cfg.steps:
                 break
         if step >= cfg.steps:

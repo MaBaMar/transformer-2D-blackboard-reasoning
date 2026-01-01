@@ -9,10 +9,12 @@ from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndB
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from src.evaluation.gptbase_wrapper import GPTBaseWrapper
 from src.models.eogar import EOgar
 from projectlib.my_datasets import *
 from projectlib.my_datasets.collators import collate_bb_state_int, make_collator_with_args
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
+from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY
 
 
 
@@ -45,7 +47,7 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
 
         if tok.pad_token_id is None:
             tok.pad_token = tok.eos_token
-        
+
         pipe = pipeline(
             "text-generation",
             model=model,
@@ -53,9 +55,13 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
         )
 
         return pipe, tok
-        
-    elif task == "scratchpad":
-        raise NotImplementedError("Implement scratchpads!")
+
+    elif task == "scratchpad" or task == "cot":
+        tok = GPTBaseTokenizer(torch.device(device))
+        model = GPTStyleBaseline.load_from_path(model_path)
+        reasoner = GPTBaseWrapper(model, torch.device(device), tok)
+
+        return reasoner, tok
 
     elif task == "blackboard-1d":
         tok = BBVocabTokenizer()
@@ -93,9 +99,9 @@ def load_dataset(task: str, size: int, digits: int, bb_spec: BlackboardSpec, see
         )
 
         return DataLoader(dataset, batch_size=batch_size, shuffle=False)
-    
-    elif task == "scratchpad":
-        dataset = ScratchpadDataset(
+
+    elif task == "scratchpad" or task == "cot":
+        dataset = _DATA_T_REGISTRY[task](
             split=Split.EVAL,
             seed=seed,
             generation_spec=spec,
@@ -125,7 +131,7 @@ def load_dataset(task: str, size: int, digits: int, bb_spec: BlackboardSpec, see
 
     else:
         raise TypeError("Unsupported task!")
-    
+
 
 
 def ask(input, task, pipe, tok):
@@ -141,20 +147,9 @@ def ask(input, task, pipe, tok):
             pred = int(m.group(0))
         else:
             return None
-        
-    elif task == "scratch_pad":
-        raise NotImplementedError("Implement scratch_pad!")
-    
-        prompt = (f"You are a calculator. Show your work between <scratch> and </scratch>. Then output a single line: \"Result: <number>\" and stop. Your Task including an Example: {input}")
-        out = pipe(prompt, max_new_tokens=200 ,do_sample=False,
-                    truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
-        added = out[len(prompt):].strip()
-        m = re.findall(r"Result:\s*([0-9 ]+)", added)
-        if m:
-            raw = m[0].strip()
-        else:
-            return None
-        pred = int(raw.replace(" ", ""))
+
+    elif task == "scratchpad" or task == "cot":
+        pred = pipe.compute_from_databatch(input).results
 
     elif task == "blackboard-2d" or task == "blackboard-1d":
         out = pipe.compute_from_databatch(input)
@@ -164,7 +159,7 @@ def ask(input, task, pipe, tok):
         raise TypeError("Unsupported task!")
 
     return pred
-    
+
 
 
 def check_prediction(prediction, label, task) -> int:
@@ -172,12 +167,9 @@ def check_prediction(prediction, label, task) -> int:
         raise NotImplementedError("Implement basic!")
         result_true = int(label[0])
 
-    elif task == "scratch_pad":
-        raise NotImplementedError("Implement scratch_pad!")
-        result_true = extract_label_number(label[0])
-
-    elif task == "blackboard-2d" or task == "blackboard-1d":
-        return (prediction == label).float().mean()
+    elif task in ["scratchpad", "cot", "blackboard-2d", "blackboard-1d"]:
+        # we need to do sum, as the last batch might not be full (we have drop_last = False in the dataloader)
+        return (prediction == label).float().sum()
 
     else:
         raise TypeError("Unsupported task!")
@@ -226,11 +218,11 @@ def experiment(
             "task": task,
             "size": size,
             "batch_size": batch_size,
-            "bb_spec": { 
-                "height": bb_spec.height, 
-                "width": bb_spec.width, 
-                "randomize_position": bb_spec.randomize_position, 
-                "operation": bb_spec.operation, 
+            "bb_spec": {
+                "height": bb_spec.height,
+                "width": bb_spec.width,
+                "randomize_position": bb_spec.randomize_position,
+                "operation": bb_spec.operation,
             },
             "digits": digits,
             "seed": seed,
@@ -240,7 +232,7 @@ def experiment(
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #
@@ -250,19 +242,19 @@ def experiment(
     print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
 
     pipe, tok = setup_model(
-        model_path=model_path, 
-        digits=digits, 
-        bb_spec=bb_spec, 
-        task=task, 
+        model_path=model_path,
+        digits=digits,
+        bb_spec=bb_spec,
+        task=task,
         device=device
     )
 
     dataloader = load_dataset(
-        task=task, 
-        size=size, 
-        digits=digits, 
-        bb_spec=bb_spec, 
-        seed=seed, 
+        task=task,
+        size=size,
+        digits=digits,
+        bb_spec=bb_spec,
+        seed=seed,
         batch_size=batch_size
     )
 
@@ -271,6 +263,7 @@ def experiment(
     #
 
     correct = 0.0
+    elem_count = 0
 
     for element in tqdm(dataloader):
         if task in ["blackboard-1d", "blackboard-2d"]:
@@ -284,8 +277,9 @@ def experiment(
         prediction = ask(input_text, task, pipe, tok)
 
         correct += check_prediction(prediction, label, task)
+        elem_count += len(label)
 
-    acc = correct / size
+    acc = correct / elem_count
 
     wandb.log({
         "accuracy": acc,
@@ -293,7 +287,7 @@ def experiment(
 
     wandb.finish()
 
-    
+
 
 def main(args):
     bb_op = None

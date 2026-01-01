@@ -8,7 +8,7 @@ import sys
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from abc import ABC, abstractmethod
-from typing import Optional, Union, TypeAlias, Any
+from typing import Literal, Optional, Union, TypeAlias, Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -22,7 +22,7 @@ RANDOM_SEED = 0
 MIN_DIGITS = 4
 
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
-
+PaddingMode: TypeAlias = Literal["longest", "max_length", "do_not_pad"]
 
 
 class Split(Enum):
@@ -76,7 +76,8 @@ class GeneratedDataset(Dataset, ABC):
         max_length: int = TOKENIZER_MAX_LENGTH,
         split: Split = Split.EVAL,
         seed: Optional[int] = None,
-        disallow_op_permutations: bool = False
+        disallow_op_permutations: bool = False,
+        tokenizer_padding_mode: PaddingMode = "max_length"
     ):
         super().__init__()
 
@@ -86,8 +87,9 @@ class GeneratedDataset(Dataset, ABC):
         np.random.seed(seed)
         random.seed(seed)
 
-        self.tokenizer = tokenizer
-        self.max_length = max_length
+        self.tokenizer: Optional[TokenizerType] = tokenizer
+        self.max_length: int = max_length
+        self.tokenizer_padding_mode: PaddingMode = tokenizer_padding_mode
 
         if not os.path.exists(DATASETS_BASE_DIR):
             os.makedirs(DATASETS_BASE_DIR)
@@ -129,7 +131,7 @@ class GeneratedDataset(Dataset, ABC):
                 input,
                 max_length=self.max_length,
                 truncation=True,
-                padding="max_length",
+                padding=self.tokenizer_padding_mode,
                 return_tensors="pt",
             )
 
@@ -137,7 +139,7 @@ class GeneratedDataset(Dataset, ABC):
                 label,
                 max_length=self.max_length,
                 truncation=True,
-                padding="max_length",
+                padding=self.tokenizer_padding_mode,
                 return_tensors="pt",
             )
 
