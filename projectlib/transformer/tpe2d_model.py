@@ -208,6 +208,7 @@ class TwoDTPERoPEAttention(nn.Module):
         num_heads: int,
         dropout: float = 0.0,
         use_causal_mask: bool = True,
+        disable_entropy: bool = False,  # set to False for backward compatability
     ) -> None:
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
@@ -236,6 +237,8 @@ class TwoDTPERoPEAttention(nn.Module):
             head_dim=self.head_dim,
             max_position_embeddings=512,  # can grow on demand
         )
+
+        self._use_entropy: bool = not disable_entropy
 
     def _attend_with_order(
         self,
@@ -399,7 +402,7 @@ class TwoDTPERoPEAttention(nn.Module):
         # One small numerical improvement (worth doing):
         # entropy should be computed via log_softmax for stability.
         ent_loss: Optional[torch.Tensor] = None
-        if self.training:
+        if self.training and self._use_entropy:
             logp = F.log_softmax(router_logits, dim=-1)   # [B,H,L,2]
             p = logp.exp()
             entropy = -(p * logp).sum(dim=-1)            # [B,H,L]
