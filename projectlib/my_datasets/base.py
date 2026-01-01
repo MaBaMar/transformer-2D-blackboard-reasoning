@@ -19,6 +19,8 @@ DATASETS_BASE_DIR = "datasets/"
 TOKENIZER_MAX_LENGTH = 20
 RANDOM_SEED = 0
 
+MIN_DIGITS = 4
+
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 
 
@@ -157,6 +159,40 @@ class GeneratedDataset(Dataset, ABC):
 
         Warning: Sampling both (x, y) and (y, x) is allowed for x != y unless disallow_permutations is True.
         """
+        max_digits = int(math.log10(spec.high))
+        num_blocks = max_digits - MIN_DIGITS + 1
+
+        assert max_digits >= MIN_DIGITS, "Choose a minimum of 4 digits!"
+
+        values: list[tuple[int, int]] = []
+        xs, ys = [], []
+
+        for d in range(MIN_DIGITS, max_digits + 1):
+            blocksize = lambda size: size // num_blocks + (size % num_blocks if d == max_digits else 0)
+
+            d_spec = GenerationSpec(
+                low=10**(d-1),
+                high=10**d,
+                eval_size=blocksize(spec.eval_size),
+                train_size=blocksize(spec.train_size),
+                test_size=blocksize(spec.test_size),
+            )
+
+            vs = GeneratedDataset._sample_for_digits(d_spec, disallow_permutations)
+
+            xs += [x for x, _ in vs]
+            ys += [y for _, y in vs]
+
+        random.shuffle(xs)
+        random.shuffle(ys)
+
+        values = list(zip(xs, ys))
+
+        assert len(values) == len(set(values)), f"Duplicate values found: {values}"
+        return values
+
+    @staticmethod
+    def _sample_for_digits(spec: GenerationSpec, disallow_permutations: bool) -> list[tuple[int, int]]:
         span = spec.high - spec.low # hi is exclusive
 
         if disallow_permutations:

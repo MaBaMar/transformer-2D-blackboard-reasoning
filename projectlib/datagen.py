@@ -44,7 +44,7 @@ TOKENIZERS = {
 
 
 def generate_addition(digits: int, low: int, high: int, tokenizer: TokenizerType | None = None):
-    AdditionDataset(
+    data = AdditionDataset(
         path=EVAL_PATH_BASE.format(f"addition_{digits}"),
         tokenizer=tokenizer,
         regenerate=REGENERATE,
