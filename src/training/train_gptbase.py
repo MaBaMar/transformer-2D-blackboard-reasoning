@@ -9,9 +9,10 @@ from argparse import ArgumentParser
 import torch
 import os
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from logging import getLogger, basicConfig, DEBUG
 from tqdm import tqdm
+from math import ceil
 
 from transformers.optimization import get_constant_schedule, get_cosine_schedule_with_warmup
 import wandb
@@ -20,7 +21,13 @@ import numpy as np
 from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY, dataset_option_t
 from src.evaluation.gptbase_wrapper import GPTBaseInferenceBatch
 from projectlib.my_datasets import  GenerationSpec, Split
+from projectlib.my_datasets.scratchpads import Operation
 from projectlib.trainutils import compute_accuracy_pt
+
+_SP_OP_REGISTRY: dict[str, Operation] = {
+    "add": '+',
+    "sub": '-',
+}
 
 def compute_gptbase_digit_acc_from_stream(logits: torch.Tensor, labels: torch.Tensor, tokenizer: GPTBaseTokenizer, attn_mask: torch.Tensor) -> float:
     """
@@ -55,6 +62,7 @@ def train(
     name: str,
     model_name: str,
     dataset_variant: dataset_option_t,
+    operation: str,
     train_size: int,
     test_size: int,
     eval_size: int,
@@ -121,26 +129,55 @@ def train(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    scale_factor = len(_SP_OP_REGISTRY) if operation == "mixed" else 1
     spec = GenerationSpec.digits(
         digits=digits,
-        eval_size=eval_size,
-        test_size=test_size,
-        train_size=train_size,
+        eval_size=ceil(eval_size / scale_factor),
+        test_size=ceil(test_size / scale_factor),
+        train_size=ceil(train_size / scale_factor),
     )
 
-    dataset_train = _DATA_T_REGISTRY[dataset_variant](
-        regenerate=True,
-        split=Split.TRAIN,
-        seed=seed,
-        generation_spec=spec,
-    )
+    _datacls = _DATA_T_REGISTRY[dataset_variant]
+    if operation == "mixed":
+        ds_train, ds_test = [], []
+        for op in _SP_OP_REGISTRY.values():
+            ds_train.append(
+                _datacls(
+                    regenerate=True,
+                    split=Split.TRAIN,
+                    seed=seed,  # maybe we want to add +1 in each iteration here, to avoid the same samples for both operations
+                    generation_spec=spec,
+                    operand=op,
+                )
+            )
+            ds_test.append(
+                _datacls(
+                    regenerate=True,
+                    split=Split.TEST,
+                    seed=seed,
+                    generation_spec=spec,
+                    operand=op,
+                )
+            )
+        dataset_train = ConcatDataset(ds_train)
+        dataset_test = ConcatDataset(ds_test)
+    else:
+        dataset_train = _datacls(
+            regenerate=True,
+            split=Split.TRAIN,
+            seed=seed,
+            generation_spec=spec,
+            operand=_SP_OP_REGISTRY[operation],
+        )
 
-    dataset_test = _DATA_T_REGISTRY[dataset_variant](
-        regenerate=True,
-        split=Split.TEST,
-        seed=seed,
-        generation_spec=spec,
-    )
+        dataset_test = _datacls(
+            regenerate=True,
+            split=Split.TEST,
+            seed=seed,
+            generation_spec=spec,
+            operand=_SP_OP_REGISTRY[operation],
+        )
+
 
     tokenizer: GPTBaseTokenizer = GPTBaseTokenizer(torch.device(device))
 
@@ -279,6 +316,7 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, required=True)
     parser.add_argument("--model_name", type=str, default="gpt-base")
     parser.add_argument("--dataset_variant", type=str, required=True, choices=_DATA_T_REGISTRY.keys())
+    parser.add_argument("--operation", type=str, required=True, choices=["mixed", *_SP_OP_REGISTRY.keys()])
     parser.add_argument("--train_size", type=int, required=True)
     parser.add_argument("--test_size", type=int, required=True)
     parser.add_argument("--eval_size", type=int, required=True)
