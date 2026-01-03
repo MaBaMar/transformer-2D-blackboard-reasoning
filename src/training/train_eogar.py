@@ -11,17 +11,18 @@ import numpy as np
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, Subset, ConcatDataset
 from tqdm import tqdm
+from math import ceil
 
 from src.models.eogar import EOgar
-from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition, Subtraction
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition, Subtraction, CarryOperation
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 from projectlib.trainutils import compute_accuracy_pt, compute_accuracy
 
 
 
-_SP_OP_REGISTRY: dict[str, Operation] = {
-    "add": '+',
-    "sub": '-',
+BB_OPERATION: dict[str, CarryOperation] = {
+    "add": Addition(),
+    "sub": Subtraction(),
 }
 
 
@@ -95,7 +96,10 @@ def train(
         errors_per_epoch: int,
         digits: int,
         batch_size: int,
-        bb_spec: BlackboardSpec,
+        bb_height: int,
+        bb_width: int,
+        bb_randomize_position: bool,
+        bb_operation: str,
         model_dimension: int,
         num_heads_encoder: int,
         n_encoder_blocks: int,
@@ -125,23 +129,32 @@ def train(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
+
+    scale_factor = len(BB_OPERATION) if bb_operation == "mixed" else 1
     spec = GenerationSpec.digits(
         digits=digits,
-        eval_size=eval_size,
-        test_size=test_size,
-        train_size=train_size,
+        eval_size=ceil(eval_size / scale_factor),
+        test_size=ceil(test_size / scale_factor),
+        train_size=ceil(train_size / scale_factor),
     )
 
-    if operation == "mixed":
+    if bb_operation == "mixed":
         ds_train, ds_test = [], []
-        for op in _SP_OP_REGISTRY.values():
+        for op in BB_OPERATION.values():
+            bb_spec = BlackboardSpec(
+                height=bb_height,
+                width=bb_width,
+                randomize_position=bb_randomize_position,
+                operation=op,
+            )
+
             ds_train.append(
                 TokenizedBlackboardDataset(
                     regenerate=True,
                     split=Split.TRAIN,
                     seed=seed,  # maybe we want to add +1 in each iteration here, to avoid the same samples for both operations
                     generation_spec=spec,
-                    operand=op,
+                    bb_spec=bb_spec,
                 )
             )
             ds_test.append(
@@ -150,18 +163,25 @@ def train(
                     split=Split.TEST,
                     seed=seed,
                     generation_spec=spec,
-                    operand=op,
+                    bb_spec=bb_spec,
                 )
             )
         bb_full_dataset_train = ConcatDataset(ds_train)
         bb_dataset_test = ConcatDataset(ds_test)
     else:
+        bb_spec = BlackboardSpec(
+            height=bb_height,
+            width=bb_width,
+            randomize_position=bb_randomize_position,
+            operation=BB_OPERATION[bb_operation],
+        )
+
         bb_full_dataset_train = TokenizedBlackboardDataset(
             regenerate=True,
             split=Split.TRAIN,
             seed=seed,
             generation_spec=spec,
-            operand=_SP_OP_REGISTRY[operation],
+            bb_spec=bb_spec,
         )
 
         bb_dataset_test = TokenizedBlackboardDataset(
@@ -169,7 +189,7 @@ def train(
             split=Split.TEST,
             seed=seed,
             generation_spec=spec,
-            operand=_SP_OP_REGISTRY[operation],
+            bb_spec=bb_spec,
         )
 
     pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
@@ -399,24 +419,6 @@ def train(
 
 
 def main(args):
-    op = None
-    match args.operation:
-        case "add":
-            op = Addition()
-        case "sub":
-            op = Subtraction()
-        case "mixed":
-            raise NotImplementedError()
-        case _:
-            raise ValueError()
-
-    bb_spec = BlackboardSpec(
-        height=args.bb_height,
-        width=args.bb_width,
-        randomize_position=args.bb_randomize_position=="true",
-        operation=op,
-    )
-
     train(
         name=args.name,
         model_name=args.model_name,
@@ -428,7 +430,10 @@ def main(args):
         error_pool_fraction=args.error_pool_fraction,
         errors_per_epoch=args.errors_per_epoch,
         batch_size=args.batch_size,
-        bb_spec=bb_spec,
+        bb_height=args.bb_heigh,
+        bb_width=args.bb_width,
+        bb_randomize_position=args.bb_randomize_position,
+        bb_operation=args.operation,
         model_dimension=args.model_dimension,
         num_heads_encoder=args.num_heads_encoder,
         n_encoder_blocks=args.n_encoder_blocks,
