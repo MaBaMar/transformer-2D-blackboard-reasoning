@@ -6,7 +6,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 NAME = "OoD_Train_EOgar"
-MODE = "dinfk"      # "local", "euler", "dinfk"
+MODE = "euler"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
@@ -36,7 +36,7 @@ applicable_configs = {
         { "height": 8, "width": 24, "randomize_position": "false", "operation": "add" },
         # { "height": 8, "width": 16, "randomize_position": "true", "operation": "add" },
     ],
-    "entropy_coeff": [0.5],
+    "entropy_coeff": [0.0], # [0.0, 0.1, 0.2, 0.5, 1.0],
     "rope_mode": ["1d", "2d"],
     "learning_rate": [1e-3],
     "epochs": [10],
@@ -70,7 +70,7 @@ def main(args):
                                                     "model_dimension": model_spec["model_dimension"],
                                                     "num_heads_encoder": model_spec["num_heads_encoder"],
                                                     "n_encoder_blocks": model_spec["n_encoder_blocks"],
-                                                    "entropy_coeff": entropy_coeff,
+                                                    "entropy_coef": entropy_coeff,
                                                     "rope_mode": rope_mode,
                                                     "learning_rate": learning_rate,
                                                     "epochs": epochs,
@@ -95,7 +95,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-cpus", type=int, default=1)
-    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--num-gpus", type=int, default=0)
     parser.add_argument("--num-hours", type=int, default=7)
     args = parser.parse_args()
     main(args)

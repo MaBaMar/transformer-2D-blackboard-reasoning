@@ -154,7 +154,7 @@ def train(
                     split=Split.TRAIN,
                     seed=seed,  # maybe we want to add +1 in each iteration here, to avoid the same samples for both operations
                     generation_spec=spec,
-                    bb_spec=bb_spec,
+                    blackboard_spec=bb_spec,
                 )
             )
             ds_test.append(
@@ -163,7 +163,7 @@ def train(
                     split=Split.TEST,
                     seed=seed,
                     generation_spec=spec,
-                    bb_spec=bb_spec,
+                    blackboard_spec=bb_spec,
                 )
             )
         bb_full_dataset_train = ConcatDataset(ds_train)
@@ -181,7 +181,7 @@ def train(
             split=Split.TRAIN,
             seed=seed,
             generation_spec=spec,
-            bb_spec=bb_spec,
+            blackboard_spec=bb_spec,
         )
 
         bb_dataset_test = TokenizedBlackboardDataset(
@@ -189,7 +189,7 @@ def train(
             split=Split.TEST,
             seed=seed,
             generation_spec=spec,
-            bb_spec=bb_spec,
+            blackboard_spec=bb_spec,
         )
 
     pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
@@ -430,7 +430,7 @@ def main(args):
         error_pool_fraction=args.error_pool_fraction,
         errors_per_epoch=args.errors_per_epoch,
         batch_size=args.batch_size,
-        bb_height=args.bb_heigh,
+        bb_height=args.bb_height,
         bb_width=args.bb_width,
         bb_randomize_position=args.bb_randomize_position,
         bb_operation=args.operation,
