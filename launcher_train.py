@@ -5,12 +5,12 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Training_EOgar"
-MODE = "euler"      # "local", "euler"
+NAME = "OoD_Train_EOgar"
+MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 10
+NUM_SEEDS = 1
 
 #
 #   Model parameters and corresponding sizes
@@ -18,23 +18,27 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [4, 8, 12],
+    "digits": [12],
     "train_sizes": [8192],
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
-        { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        # { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        # { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
+        { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+
+        # { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
         # { "model_name": "EOgar-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
     ],
     "bb_specs": [
-        { "height": 8, "width": 16, "randomize_position": "false", "operation": "addition" },
-        { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
+        { "height": 8, "width": 24, "randomize_position": "false", "operation": "addition" },
+        # { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
     ],
     "rope_mode": ["1d", "2d"],
     "learning_rate": [1e-3],
-    "epochs": [6],
+    "epochs": [10],
 }
 
 def main(args):
@@ -88,7 +92,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-cpus", type=int, default=1)
-    parser.add_argument("--num-gpus", type=int, default=0)
-    parser.add_argument("--num-hours", type=int, default=8)
+    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--num-hours", type=int, default=7)
     args = parser.parse_args()
     main(args)

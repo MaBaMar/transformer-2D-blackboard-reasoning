@@ -158,6 +158,36 @@ def generate_run_commands(
                 else:
                     os.system(cmd)
 
+    elif mode == "dinfk":
+        cluster_cmds = []
+        if num_hours is None:
+            num_hours = 23 if long else 3
+        sbatch_cmd = (
+            "sbatch -A deep_learning "
+            + f"--time={num_hours}:59:00 "
+            + f"--mem-per-cpu={mem} "
+            + f"-n {num_cpus} "
+        )
+
+        if num_gpus > 0:
+            sbatch_cmd += f"--gpus=5060ti:{num_gpus} "
+
+        for python_cmd in command_list:
+            cluster_cmds.append(sbatch_cmd + f'--wrap="{python_cmd}"')
+
+        if promt:
+            answer = input(
+                f"About to submit {len(cluster_cmds)} compute jobs to the cluster. Proceed? [yes/no] "
+            )
+        else:
+            answer = "yes"
+        if answer == "yes" or answer == "y":
+            for cmd in cluster_cmds:
+                if dry:
+                    print(cmd)
+                else:
+                    os.system(cmd)
+
     elif mode == "local":
         if promt:
             answer = input(
