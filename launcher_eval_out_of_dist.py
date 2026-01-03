@@ -22,31 +22,18 @@ applicable_configs = {
         # Scratchpad
         # { "name": "todo", "path": "todo", "task": "scratchpad" },
 
+        # CoT
+        # { "name": "todo", "path": "todo", "task": "scratchpad" },
+
         # 1D-RoPE
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-1d_d2_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-1d_d4_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-1d_d8_s{seed:d}.pt", "task": "blackboard-1d" },
-
-        { "name": "EOgar-400K", "path": "models/EOgar-400K-1d_d2_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-400K", "path": "models/EOgar-400K-1d_d4_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-400K", "path": "models/EOgar-400K-1d_d8_s{seed:d}.pt", "task": "blackboard-1d" },
-
-        { "name": "EOgar-800K", "path": "models/EOgar-800K-1d_d2_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-800K", "path": "models/EOgar-800K-1d_d4_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-800K", "path": "models/EOgar-800K-1d_d8_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
 
         # 2D-RoPE
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_d2_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_d4_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-100K", "path": "models/EOgar-100K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
-
-        { "name": "EOgar-400K", "path": "models/EOgar-400K-2d_d2_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-400K", "path": "models/EOgar-400K-2d_d4_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-400K", "path": "models/EOgar-400K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
-
-        { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d2_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d4_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-800K", "path": "models/EOgar-800K-2d_d8_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
     ],
     "bb_specs": [
         { "height": 5, "width": 10, "randomize_position": "false", "operation": "addition" },

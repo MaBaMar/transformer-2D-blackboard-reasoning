@@ -10,7 +10,7 @@ MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 1
+NUM_SEEDS = 10
 
 #
 #   Model parameters and corresponding sizes
