@@ -1,11 +1,11 @@
 import argparse
 
-from src.training import train_eogar as experiment
+from src.training import train_gptbase as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "OoD_Train_EOgar"
+NAME = "OoD_Train_CoT"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
@@ -21,22 +21,12 @@ applicable_configs = {
     "digits": [12],
     "train_sizes": [8192],
     "test_sizes": [1024],
-    "batch_size": [64],
+    "batch_size": [8],
     "model_spec": [
-        # { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        # { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
-        { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-
-        # { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        # { "model_name": "EOgar-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
+        { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads": 4, "n_decoder_blocks": 8 },
     ],
-    "bb_specs": [
-        { "height": 8, "width": 24, "randomize_position": "false", "operation": "addition" },
-        # { "height": 8, "width": 16, "randomize_position": "true", "operation": "addition" },
-    ],
-    "rope_mode": ["1d", "2d"],
+    "operation": ["add"], # ["add", "sub", "mixed"],
+    "dataset_variant": ["cot"], # ["cot", "scratchpad"],
     "learning_rate": [1e-3],
     "epochs": [10],
 }
@@ -48,27 +38,26 @@ def main(args):
             for test_size in applicable_configs["test_sizes"]:
                 for batch_size in applicable_configs["batch_size"]:
                     for model_spec in applicable_configs["model_spec"]:
-                        for bb_spec in applicable_configs["bb_specs"]:
-                            for rope_mode in applicable_configs["rope_mode"]:
+                        for operation in applicable_configs["operation"]:
+                            for dataset_variant in applicable_configs["dataset_variant"]:
                                 for learning_rate in applicable_configs["learning_rate"]:
                                     for epochs in applicable_configs["epochs"]:
                                         for seed in applicable_configs["seed"]:
                                             flags = {
                                                 "name": NAME,
-                                                "model_name": model_spec["model_name"] + f"-{rope_mode}",
+                                                "model_name": model_spec["model_name"],
                                                 "digits": digits,
                                                 "train_size": train_size,
                                                 "test_size": test_size,
                                                 "eval_size": EVAL_SIZE,
                                                 "batch_size": batch_size,
-                                                "bb_height": bb_spec["height"],
-                                                "bb_width": bb_spec["width"],
-                                                "bb_randomize_position": bb_spec["randomize_position"],
-                                                "operation": bb_spec["operation"],
+                                                "dataset_variant": dataset_variant, 
+                                                "operation": operation,
+                                                "max_context_length": 400,
+                                                "max_output_length": 400,
                                                 "model_dimension": model_spec["model_dimension"],
-                                                "num_heads_encoder": model_spec["num_heads_encoder"],
-                                                "n_encoder_blocks": model_spec["n_encoder_blocks"],
-                                                "rope_mode": rope_mode,
+                                                "num_heads": model_spec["num_heads"],
+                                                "n_decoder_blocks": model_spec["n_decoder_blocks"],
                                                 "learning_rate": learning_rate,
                                                 "epochs": epochs,
                                                 "seed": seed,

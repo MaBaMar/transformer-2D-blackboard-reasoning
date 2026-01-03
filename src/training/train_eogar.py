@@ -18,6 +18,13 @@ from projectlib.my_datasets.collators import collate_bb_state_state, make_collat
 from projectlib.trainutils import compute_accuracy_pt, compute_accuracy
 
 
+
+_SP_OP_REGISTRY: dict[str, Operation] = {
+    "add": '+',
+    "sub": '-',
+}
+
+
 MODELS_PATH = "./models/"
 
 class ErrorDataset(Dataset):
@@ -125,21 +132,45 @@ def train(
         train_size=train_size,
     )
 
-    bb_full_dataset_train = TokenizedBlackboardDataset(
-        regenerate=True,
-        split=Split.TRAIN,
-        seed=seed,
-        generation_spec=spec,
-        blackboard_spec=bb_spec,
-    )
+    if operation == "mixed":
+        ds_train, ds_test = [], []
+        for op in _SP_OP_REGISTRY.values():
+            ds_train.append(
+                TokenizedBlackboardDataset(
+                    regenerate=True,
+                    split=Split.TRAIN,
+                    seed=seed,  # maybe we want to add +1 in each iteration here, to avoid the same samples for both operations
+                    generation_spec=spec,
+                    operand=op,
+                )
+            )
+            ds_test.append(
+                TokenizedBlackboardDataset(
+                    regenerate=True,
+                    split=Split.TEST,
+                    seed=seed,
+                    generation_spec=spec,
+                    operand=op,
+                )
+            )
+        bb_full_dataset_train = ConcatDataset(ds_train)
+        bb_dataset_test = ConcatDataset(ds_test)
+    else:
+        bb_full_dataset_train = TokenizedBlackboardDataset(
+            regenerate=True,
+            split=Split.TRAIN,
+            seed=seed,
+            generation_spec=spec,
+            operand=_SP_OP_REGISTRY[operation],
+        )
 
-    bb_dataset_test = TokenizedBlackboardDataset(
-        regenerate=True,
-        split=Split.TEST,
-        seed=seed,
-        generation_spec=spec,
-        blackboard_spec=bb_spec,
-    )
+        bb_dataset_test = TokenizedBlackboardDataset(
+            regenerate=True,
+            split=Split.TEST,
+            seed=seed,
+            generation_spec=spec,
+            operand=_SP_OP_REGISTRY[operation],
+        )
 
     pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
 
@@ -370,10 +401,12 @@ def train(
 def main(args):
     op = None
     match args.operation:
-        case "addition":
+        case "add":
             op = Addition()
-        case "subtraction":
+        case "sub":
             op = Subtraction()
+        case "mixed":
+            raise NotImplementedError()
         case _:
             raise ValueError()
 
