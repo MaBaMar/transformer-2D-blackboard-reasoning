@@ -18,22 +18,23 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-MODEL_NAME = "larger_test.pth"
+MODEL_NAME = "eogar_save_test.pth"
 
 def check(train = False):
 
     spec = GenerationSpec(
-        train_size = 20000,
-        test_size = 5000,
-        eval_size = 5000,
-        low = 10,
-        high = 10000
+        train_size = 8192,
+        test_size = 8192,
+        eval_size = 1024,
+        low = 1000,
+        high = 10**12
     )
 
-    bb_spec = BlackboardSpec(5, 10, False, Addition())
+    bb_spec = BlackboardSpec(5, 15, False, Addition())
 
-    bb_dataset = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec, split=Split.TRAIN)
-    bb_dataset_eval = TokenizedBlackboardDataset(regenerate=True, generation_spec=spec, blackboard_spec=bb_spec, split=Split.EVAL)
+    bb_dataset = TokenizedBlackboardDataset(regenerate=False, generation_spec=spec, blackboard_spec=bb_spec, split=Split.TRAIN)
+    # exit(-1)
+    bb_dataset_eval = TokenizedBlackboardDataset(regenerate=False, generation_spec=spec, blackboard_spec=bb_spec, split=Split.EVAL)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     B = 64
@@ -60,7 +61,7 @@ def check(train = False):
     print("Model initialized")
 
     if(train):
-        epochs = 15
+        epochs = 5
         optimizer = AdamW(model.parameters(), lr=1e-3)
         total_steps = len(data_loader_train) * epochs
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=0)
@@ -94,7 +95,7 @@ def check(train = False):
             if epoch % 5 == 0:
                 torch.save(model.state_dict(), f"model_epoch_{epoch}.pth")
                 acc = 0
-                reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
+                reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=15)
                 for i, [x, y] in enumerate(data_loader_eval):
                     chainlist = reasoner.compute_from_databatch(x)
                     # print(chainlist_to_results(chainlist))
@@ -107,24 +108,26 @@ def check(train = False):
     else:
         model.load_state_dict(torch.load(MODEL_NAME))
 
-    reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=8)
+    reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=15)
 
     acc = 0
+    cnt = 0
     for i, [x, y] in enumerate(data_loader_eval):
         chainlist = reasoner.compute_from_databatch(x)
         # print(chainlist_to_results(chainlist))
         acc += (chainlist_to_results(chainlist).to(device) == y).sum().item()
-    acc /= len(data_loader_eval)
+        cnt += x[0].shape[0]
+    acc /= cnt
 
     print(f"Accuracy: {acc:.4f}")
 
-    # print("Model loaded")
-    # st: BBChain = reasoner.compute_from_operands(10, 10) # TODO: fix generation here!
-    # st.show_steps()
+    print("Model loaded")
+    st: BBChain = reasoner.compute_from_operands(67544657, 12342564) # TODO: fix generation here!
+    st.show_steps()
 
-    # st = reasoner.compute_from_operands(20, 30)
-    # st.show_steps()
-    # print("Result is: ", st.result)
+    st = reasoner.compute_from_operands(20, 30)
+    st.show_steps()
+    print("Result is: ", st.result)
 
 
     # st = reasoner.compute_from_operands(5, 19)
@@ -154,4 +157,4 @@ if __name__ == "__main__":
     logging.basicConfig()
     # logging.getLogger().setLevel(logging.DEBUG)
 
-    check(True)
+    check(False)
