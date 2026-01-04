@@ -13,7 +13,7 @@ import json
 
 from logging import getLogger
 
-from projectlib.transformer.tpe2d_model import FeedForward, OutputHead
+from projectlib.transformer.tpe2d_model import FeedForward, OutputHead, TwoDTPERoPEAttention
 from projectlib.my_datasets import ScratchpadDataset, CoTDataset
 
 # -----------------------------------------
@@ -102,7 +102,6 @@ class GPTStyleBaseline(nn.Module):
     ) -> None:
         super().__init__()
         self.tok_emb = nn.Embedding(vocab_size, d_model)    # token embedding
-        self.pos_emb = nn.Embedding(max_seq_len, d_model)    # additive positional embedding
 
         self.blocks = nn.ModuleList([
             self._TransformerBlock(d_model, num_heads, dropout, max_seq_len)
@@ -143,15 +142,13 @@ class GPTStyleBaseline(nn.Module):
         # make sure all padding tokens are ignored!
         attention_mask = attention_mask & (x != self._pad_id)
 
-        # compute position IDs for all non-padding tokens
-        pos_ids = (attention_mask.cumsum(dim=1) - 1).clamp(min=0)
-
         # embedding (+ some random embedding dropout)
-        x = self.tok_emb(x) + self.pos_emb(pos_ids)
+        x = self.tok_emb(x)
+        x = self.dropout(x)
 
         # zero out padding tokens to avoid influencing feed forward, layer norm etc....
         x = x * attention_mask.unsqueeze(-1)
-        x = self.embedding_dropout(x)
+        # x = self.embedding_dropout(x)
 
         # pass through transformer blocks
         for block in self.blocks:
@@ -188,25 +185,37 @@ class GPTStyleBaseline(nn.Module):
             self.ln1 = nn.LayerNorm(d_model)
             self.ln2 = nn.LayerNorm(d_model)
             self.dropout = nn.Dropout(dropout)
-            self.attn: nn.MultiheadAttention = nn.MultiheadAttention(d_model, num_heads, dropout=dropout, batch_first=True)
+
+            # the 2D rope module also supports 1D rope if data is tailored accordingly. This is slightly wasteful in terms of compute
+            # but makes for a guaranteed-fair comparison
+            self.attn: TwoDTPERoPEAttention = TwoDTPERoPEAttention(
+                d_model=d_model,
+                num_heads=num_heads,
+                dropout=dropout,
+                use_causal_mask=True,
+                use_entropy=False,
+            )
+
             self.ffn = FeedForward(d_model, 4 * d_model, dropout)
-            self.register_buffer('causal_buffer', torch.triu(
-                torch.ones((maxlen, maxlen), dtype=torch.bool),
-                diagonal=1
-            ))
 
         def forward(
             self,
             x: torch.Tensor,
             attention_mask: torch.Tensor
         ):
-            L = x.shape[1]
+            B, L = x.shape[:2] # shape is [B,L, model_dimension]
 
             h = self.ln1(x)
 
             # do masked multihead attention:
-            causal_mask = self.causal_buffer[:L, :L]
-            h, _ = self.attn(h, h, h, attn_mask=causal_mask, key_padding_mask=(attention_mask==0), need_weights=False)
+            # causal_mask = self.causal_buffer[:L, :L]
+            _1d_rope_indices = torch.arange(0, L, dtype=torch.long, device=x.device).unsqueeze(0).expand(B, -1)
+            h, _ = self.attn.forward(
+                hidden_states=h,
+                pos_row=_1d_rope_indices,
+                pos_col=_1d_rope_indices,
+                key_padding_mask=(attention_mask==0)
+            )
 
             # currently, pad tokens are completely masked out and cannot even attend to themselves. This produces
             # "floating" values (values with no input, i.e. NaNs)  after attention. The NaN values then propagate and in the final head mix with all
