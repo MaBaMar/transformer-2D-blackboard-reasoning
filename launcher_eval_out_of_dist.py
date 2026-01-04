@@ -5,13 +5,13 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Evaluation"
-MODE = "local"      # "local", "euler"
+NAME = "OoD_Evaluation"
+MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 1024    # Make sure that this matches with the one in the training launchers
+EVAL_SIZE = 8192    # Make sure that this matches with the one in the training launchers
 BATCH_SIZE = 64
-NUM_SEEDS = 10
+NUM_SEEDS = 1
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
@@ -23,22 +23,22 @@ applicable_configs = {
         # { "name": "todo", "path": "todo", "task": "scratchpad" },
 
         # CoT
-        # { "name": "todo", "path": "todo", "task": "scratchpad" },
+        { "name": "CoT-d64-h4-b8", "path": "models/CoT-d64-h4-b8_d12_s{seed:d}.pt", "task": "cot" },
 
         # 1D-RoPE
-        { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
+        # { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
+        # { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-1d_d12_s{seed:d}_rF.pt", "task": "blackboard-1d" },
 
         # 2D-RoPE
-        { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
+        # { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
+        # { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-2d_d12_s{seed:d}_rF.pt", "task": "blackboard-2d" },
     ],
     "bb_specs": [
-        { "height": 5, "width": 10, "randomize_position": "false", "operation": "addition" },
+        { "height": 8, "width": 24, "randomize_position": "false", "operation": "add" },
     ],
-    "digits": [2, 6, 8],
+    "digits": [12, 13, 14],
 }
 
 def main(args):
@@ -80,7 +80,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-cpus", type=int, default=1)
-    parser.add_argument("--num-gpus", type=int, default=0)
-    parser.add_argument("--num-hours", type=int, default=8)
+    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--num-hours", type=int, default=7)
     args = parser.parse_args()
     main(args)

@@ -1,7 +1,10 @@
+import getpass
 import glob
 import json
 import os
+import subprocess
 import sys
+import time
 from typing import Dict, Optional, Any, List
 
 import numpy as np
@@ -16,6 +19,27 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 RESULT_DIR = os.path.join(BASE_DIR, "results")
 
 CONDA_ENV = "dl"
+
+MAX_ACTIVE_JOBS = 2
+USER = getpass.getuser()
+
+
+
+""" Helper function """
+
+
+def count_active_jobs():
+    """
+    Count the number of active jobs of this user
+    """
+    cmd = ["squeue", "-u", USER, "-h"]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    lines = result.stdout.strip().splitlines()
+    
+    return len(lines)
+
+
 
 """ Custom Logger """
 
@@ -186,6 +210,10 @@ def generate_run_commands(
                 if dry:
                     print(cmd)
                 else:
+                    while(count_active_jobs() >= MAX_ACTIVE_JOBS):
+                        print("Waiting for jobs in queue to finish ...")
+                        time.sleep(30)
+
                     os.system(cmd)
 
     elif mode == "local":

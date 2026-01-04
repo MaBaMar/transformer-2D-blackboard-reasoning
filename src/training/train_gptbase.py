@@ -97,7 +97,7 @@ def train(
     wandb.init(
         name=name,
         entity="blackboard-reasoning",
-        project="blackboard-reasoning_gpt_baseline", # TODO change?
+        project="blackboard-reasoning",
         config={
             "model": model_name,
             "dataset_variant": dataset_variant,

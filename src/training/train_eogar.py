@@ -395,7 +395,7 @@ def train(
                 "height": bb_spec.height, 
                 "width": bb_spec.width, 
                 "randomize_position": bb_spec.randomize_position, 
-                "operation": bb_spec.operation, 
+                "operation": bb_operation, 
             },
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,

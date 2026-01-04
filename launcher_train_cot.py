@@ -23,7 +23,7 @@ applicable_configs = {
     "test_sizes": [1024],
     "batch_size": [8],
     "model_spec": [
-        { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads": 4, "n_decoder_blocks": 8 },
+        { "model_name": "CoT-d64-h4-b8", "model_dimension": 64, "num_heads": 4, "n_decoder_blocks": 8 },
     ],
     "operation": ["add"], # ["add", "sub", "mixed"],
     "dataset_variant": ["cot"], # ["cot", "scratchpad"],

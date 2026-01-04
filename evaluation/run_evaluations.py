@@ -269,12 +269,12 @@ def experiment(
         if task in ["blackboard-1d", "blackboard-2d"]:
             input_text = element[0]
             label = element[-1]
-
         else:
             input_text = element["input"]
             label = element["label"]
 
-        prediction = ask(input_text, task, pipe, tok)
+        prediction = ask(input_text, task, pipe, tok).to(device)
+        label.to(device)
 
         correct += check_prediction(prediction, label, task)
         elem_count += len(label)
@@ -292,10 +292,10 @@ def experiment(
 def main(args):
     bb_op = None
     match args.operation:
-        case "addition":
-            op = Addition()
-        case "subtraction":
-            op = Subtraction()
+        case "add":
+            bb_op = Addition()
+        case "sub":
+            bb_op = Subtraction()
         case _:
             raise ValueError()
 

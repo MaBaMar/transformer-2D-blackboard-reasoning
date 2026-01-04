@@ -297,11 +297,11 @@ class EOgar(BBChainGenerator):
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False) # TODO change this back after retraining the model
         config = checkpoint["config"]
 
         vocab_size = config["vocab_size"]
-        d_model = config["d_model"]
+        d_model = config["model_dimension"]
         num_heads_encoder = config["num_heads_encoder"]
         n_encoder_blocks = config["n_encoder_blocks"]
         pad_id = config["pad_id"]
@@ -318,7 +318,7 @@ class EOgar(BBChainGenerator):
             pad_id=pad_id,
             rope_mode=rope_mode,
             entropy_coef=entropy_coef,
-        )
+        ).to(device)
 
         model.load_state_dict(checkpoint["model_state_dict"])
 
