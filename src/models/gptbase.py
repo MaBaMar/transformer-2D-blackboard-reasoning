@@ -193,7 +193,7 @@ class GPTStyleBaseline(nn.Module):
                 num_heads=num_heads,
                 dropout=dropout,
                 use_causal_mask=True,
-                disable_entropy=True,
+                use_entropy=False,
             )
 
             self.ffn = FeedForward(d_model, 4 * d_model, dropout)
