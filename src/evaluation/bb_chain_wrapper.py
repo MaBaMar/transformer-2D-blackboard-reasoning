@@ -10,7 +10,7 @@ from logging import getLogger
 import torch
 
 from projectlib.my_datasets._blackboard_operands import Subtraction
-from projectlib.my_datasets.blackboards import BlackboardSpec, BBVocabTokenizer, bb_prettyprint, operands_to_bbchaingen
+from projectlib.my_datasets.blackboards import BB_EMPTY_TOKEN, BlackboardSpec, BBVocabTokenizer, bb_prettyprint, operands_to_bbchaingen
 from projectlib.wrappertypes import BBChainGenerator
 from projectlib.utils import ASCII_NUMBERS
 
@@ -74,7 +74,7 @@ class BBChain:
 
     def _is_empty_line(self, line: list[str]) -> bool:
         for token in line:
-            if token != self.tokenizer.empty_id:
+            if token != BB_EMPTY_TOKEN:
                 return False
         return True
 
