@@ -18,25 +18,19 @@ NUM_SEEDS = 1
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [12],
+    "digits": [10],
     "train_sizes": [8192],
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
-        # { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        # { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
         { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-
-        # { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        # { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
-        # { "model_name": "EOgar-3M", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 64 },
+        { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
     ],
     "bb_specs": [
-        { "height": 8, "width": 24, "randomize_position": "false", "operation": "add" },
-        # { "height": 8, "width": 16, "randomize_position": "true", "operation": "add" },
+        { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
     ],
-    "entropy_coeff": [1.0], # [0.0, 0.1, 0.2, 0.5, 1.0],
+    "entropy_coeff": [0.5],
     "rope_mode": ["1d", "2d"],
     "learning_rate": [1e-3],
     "epochs": [10],

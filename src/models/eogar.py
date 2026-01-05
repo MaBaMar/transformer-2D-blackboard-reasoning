@@ -298,8 +298,7 @@ class EOgar(BBChainGenerator):
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False) # TODO change this back after retraining the model
-        #checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device)
         config = checkpoint["config"]
 
         vocab_size = config["vocab_size"]
@@ -326,6 +325,6 @@ class EOgar(BBChainGenerator):
 
 
         print("Loaded model with configuration:")
-        #print(json.dumps(config, indent=4)) # TODO uncomment this after retraining the models
+        print(json.dumps(config, indent=4))
 
         return model

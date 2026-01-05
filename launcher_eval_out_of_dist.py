@@ -16,29 +16,25 @@ NUM_SEEDS = 1
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "models": [
-        # Base
-        # { "name": "todo", "path": "todo", "task": "basic" },
-
-        # Scratchpad
-        # { "name": "todo", "path": "todo", "task": "scratchpad" },
-
         # CoT
-        { "name": "CoT-d64-h4-b8", "path": "models/CoT-d64-h4-b8_d12_s{seed:d}.pt", "task": "cot" },
+        { "name": "CoT-d64-h4-b8", "path": "models/CoT-d64-h4-b8_d10_s{seed:d}.pt", "task": "cot" },
+        { "name": "CoT-d64-h4-b4", "path": "models/CoT-d64-h4-b4_d10_s{seed:d}.pt", "task": "cot" },
+        { "name": "CoT-d32-h4-b8", "path": "models/CoT-d32-h4-b8_d10_s{seed:d}.pt", "task": "cot" },
 
         # 1D-RoPE
-        # { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
-        # { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-1d_d12_s{seed:d}.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-1d_d12_s{seed:d}_rF.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d64-h4-b8-1d", "path": "models/EOgar-d64-h4-b8-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d64-h4-b4-1d", "path": "models/EOgar-d64-h4-b4-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-d32-h4-b8-1d", "path": "models/EOgar-d32-h4-b8-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
 
         # 2D-RoPE
-        # { "name": "EOgar-d32-h4-b16", "path": "models/EOgar-d32-h4-b16-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
-        # { "name": "EOgar-d32-h4-b32", "path": "models/EOgar-d32-h4-b32-2d_d12_s{seed:d}.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-d64-h4-b8", "path": "models/EOgar-d64-h4-b8-2d_d12_s{seed:d}_rF.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d64-h4-b8-2d", "path": "models/EOgar-d64-h4-b8-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d64-h4-b4-2d", "path": "models/EOgar-d64-h4-b4-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-d32-h4-b8-2d", "path": "models/EOgar-d32-h4-b8-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
     ],
     "bb_specs": [
-        { "height": 8, "width": 24, "randomize_position": "false", "operation": "add" },
+        { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
     ],
-    "digits": [12, 13, 14],
+    "digits": [10, 12, 16, 17],
 }
 
 def main(args):

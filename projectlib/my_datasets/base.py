@@ -21,6 +21,8 @@ RANDOM_SEED = 0
 
 MIN_DIGITS = 4
 
+OVERSAMPLING_FACTOR = 1.5
+
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 PaddingMode: TypeAlias = Literal["longest", "max_length", "do_not_pad"]
 
@@ -162,15 +164,18 @@ class GeneratedDataset(Dataset, ABC):
         Warning: Sampling both (x, y) and (y, x) is allowed for x != y unless disallow_permutations is True.
         """
         max_digits = int(math.log10(spec.high))
-        num_blocks = max_digits - MIN_DIGITS + 1
+        min_digits = max(MIN_DIGITS, int(math.log10(spec.low)))
+        num_blocks = max_digits - min_digits + 1
 
-        assert max_digits >= MIN_DIGITS, "Choose a minimum of 4 digits!"
+        assert max_digits >= min_digits, "Choose a minimum of 4 digits!"
 
         values: list[tuple[int, int]] = []
         xs, ys = [], []
 
-        for d in range(MIN_DIGITS, max_digits + 1):
-            blocksize = lambda size: size // num_blocks + (size % num_blocks if d == max_digits else 0)
+        for d in range(min_digits, max_digits + 1):
+            blocksize = lambda size: int((size // num_blocks + 1) * OVERSAMPLING_FACTOR)
+
+            print(f"blocksize {blocksize(spec.eval_size)}")
 
             d_spec = GenerationSpec(
                 low=10**(d-1),
@@ -190,7 +195,18 @@ class GeneratedDataset(Dataset, ABC):
 
         values = list(zip(xs, ys))
 
-        assert len(values) == len(set(values)), f"Duplicate values found: {values}"
+        for i in range(len(values)):
+            x, y = values[i]
+            if x < y:
+                values[i] = y, x
+
+        values = list(set(values))
+
+        size = spec.eval_size + spec.train_size + spec.test_size
+        assert len(values) >= size, "Too many duplicates, deduplicated list of values is too short, increase the number of digits or the oversampling factor."
+
+        values = values[:size]
+
         return values
 
     @staticmethod
