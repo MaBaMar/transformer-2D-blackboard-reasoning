@@ -67,7 +67,7 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
         tok = BBVocabTokenizer()
         model = EOgar.load_from_path(model_path)
 
-        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
+        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=2 * digits + 2, tokenizer=tok)
 
         return reasoner, tok
 
@@ -75,7 +75,7 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
         tok = BBVocabTokenizer()
         model = EOgar.load_from_path(model_path)
 
-        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
+        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=2 * digits + 2, tokenizer=tok)
 
         return reasoner, tok
 
@@ -138,16 +138,6 @@ def ask(input, task, pipe, tok):
     if task == "basic":
         raise NotImplementedError("Implement basic!")
 
-        prompt = (f"Compute the sum. Answer with just the integer. \n Q: {input} = ? A:"    )
-        out = pipe(prompt, max_new_tokens=30 ,do_sample=False,
-                    truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
-        added = out[len(prompt):].strip()
-        m = re.search(r"-?\d+", added)
-        if m:
-            pred = int(m.group(0))
-        else:
-            return None
-
     elif task == "scratchpad" or task == "cot":
         pred = pipe.compute_from_databatch(input).results
 
@@ -165,7 +155,6 @@ def ask(input, task, pipe, tok):
 def check_prediction(prediction, label, task) -> int:
     if task == "basic":
         raise NotImplementedError("Implement basic!")
-        result_true = int(label[0])
 
     elif task in ["scratchpad", "cot", "blackboard-2d", "blackboard-1d"]:
         # we need to do sum, as the last batch might not be full (we have drop_last = False in the dataloader)

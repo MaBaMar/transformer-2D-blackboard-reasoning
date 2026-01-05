@@ -16,6 +16,7 @@
 #       self.last_ent_loss  (None if not computed)
 # ------------------------------------------------------------
 
+import json
 from typing import Optional, final, Tuple, List
 import torch
 from torch import nn
@@ -298,6 +299,7 @@ class EOgar(BBChainGenerator):
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         checkpoint = torch.load(model_path, map_location=device, weights_only=False) # TODO change this back after retraining the model
+        #checkpoint = torch.load(model_path, map_location=device)
         config = checkpoint["config"]
 
         vocab_size = config["vocab_size"]
@@ -321,5 +323,9 @@ class EOgar(BBChainGenerator):
         ).to(device)
 
         model.load_state_dict(checkpoint["model_state_dict"])
+
+
+        print("Loaded model with configuration:")
+        #print(json.dumps(config, indent=4)) # TODO uncomment this after retraining the models
 
         return model
