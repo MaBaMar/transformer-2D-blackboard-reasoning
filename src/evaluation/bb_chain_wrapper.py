@@ -160,16 +160,16 @@ class BBChainReasoner:
         Returns:
             A list of BBChain objects.
         """
-        B, _ = x[0].shape
+        B, _ = x[0].shape   # x[0] contains the actual batched board states
         chains: list[BBChain] = [BBChain(self._tok, self.spec.height, self.spec.width, [x[0][i]]) for i in range(B)]
-        propagation_indices = torch.arange(B, dtype=torch.long, device=self.device)
+        propagation_indices = torch.arange(B, dtype=torch.long, device=self.device) # indices of all unfinished vectors
 
         for stidx in range(self._timeout):
             self.logger.debug(f"Step {stidx}: generate next state")               # some logging. Probably helpful for later
             bb_next = self.model.next_state(x) # dimension [B,L]
 
-            # only propagate the state if it is not an end of chain state
-            state_propagation_mask = ~(bb_next[:, 0] == self._tok.eos_id).flatten()
+            # only propagate the state if it is not an end of chain state (first token != E)
+            state_propagation_mask = (bb_next[:, 0] != self._tok.eos_id).flatten()
 
             # keep track of the chains that require further propagation
             propagation_indices = propagation_indices[state_propagation_mask]
@@ -182,8 +182,8 @@ class BBChainReasoner:
             )
 
             # add steps to chains
-            for i in range(x[0].shape[0]):
-                chains[propagation_indices[i]].add_step(bb_next[i].clone())
+            for idx, elem in zip(propagation_indices, bb_next[state_propagation_mask, :]):
+                chains[idx].add_step(elem.clone())
 
             if not state_propagation_mask.any():
                 # all chains terminated
