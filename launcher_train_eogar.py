@@ -29,11 +29,11 @@ applicable_configs = {
     ],
     "bb_specs": [
         { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
+        # { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
+        # { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
     ],
     "entropy_coeff": [0.5],
-    "rope_mode": ["1d", "2d"],
+    "rope_mode": ["1d"], # ["1d", "2d"],
     "learning_rate": [1e-3],
     "epochs": [10],
 }

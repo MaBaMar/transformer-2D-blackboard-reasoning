@@ -168,6 +168,9 @@ def train(
             )
         bb_full_dataset_train = ConcatDataset(ds_train)
         bb_dataset_test = ConcatDataset(ds_test)
+
+        pad_id = ds_train[0].bb_2D_tokenizer.pad_id
+
     else:
         bb_spec = BlackboardSpec(
             height=bb_height,
@@ -192,7 +195,7 @@ def train(
             blackboard_spec=bb_spec,
         )
 
-    pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
+        pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     vocab_size = bb_full_dataset_train.bb_2D_tokenizer.vocab_size
@@ -275,10 +278,10 @@ def train(
             "digits": digits,
             "batch_size": batch_size,
             "bb_spec": {
-                "height": bb_spec.height,
-                "width": bb_spec.width,
-                "randomize_position": bb_spec.randomize_position,
-                "operation": bb_spec.operation,
+                "height": bb_height,
+                "width": bb_width,
+                "randomize_position": bb_randomize_position,
+                "operation": bb_operation,
             },
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,

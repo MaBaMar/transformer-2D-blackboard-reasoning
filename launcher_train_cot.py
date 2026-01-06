@@ -10,7 +10,7 @@ MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 1
+NUM_SEEDS = 5
 
 #
 #   Model parameters and corresponding sizes
