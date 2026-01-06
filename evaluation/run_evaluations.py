@@ -262,10 +262,8 @@ def experiment(
             input_text = element["input"]
             label = element["label"]
 
-        prediction = ask(input_text, task, pipe, tok)
-
-        prediction.to(device)
-        label.to(device)
+        prediction = ask(input_text, task, pipe, tok).to(device)
+        label = label.to(device)
 
         correct += check_prediction(prediction, label, task)
         elem_count += len(label)

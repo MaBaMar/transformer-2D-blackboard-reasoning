@@ -175,8 +175,6 @@ class GeneratedDataset(Dataset, ABC):
         for d in range(min_digits, max_digits + 1):
             blocksize = lambda size: int((size // num_blocks + 1) * OVERSAMPLING_FACTOR)
 
-            print(f"blocksize {blocksize(spec.eval_size)}")
-
             d_spec = GenerationSpec(
                 low=10**(d-1),
                 high=10**d,
