@@ -20,24 +20,30 @@ applicable_configs = {
     # - EOgar trained on fixed positions (trainF -> _rF.pt)
     # - EOgar trained on randomized positions (trainT -> _rT.pt)
     "models": [
-        # CoT
-        { "name": "CoT", "path": "models/add/CoT_d10_s{seed:d}.pt", "task": "cot" },
+        { "name": "CoT", "path": "models/{operation}/CoT_d10_s{seed:d}.pt", "task": "cot" },
 
-        # EOgar trained with TrainPos = false  (location generalization baseline)
-        { "name": "EOgar-1d-trainF", "path": "models/add/EOgar-1d_d10_s{seed:d}_rF.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-2d-trainF", "path": "models/add/EOgar-2d_d10_s{seed:d}_rF.pt", "task": "blackboard-2d" },
+        # EOgar trained with TrainPos = false  -> _rF.pt
+        { "name": "EOgar-1d-trainF", "path": "models/{operation}/EOgar-1d_d10_s{seed:d}_rF.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-2d-trainF", "path": "models/{operation}/EOgar-2d_d10_s{seed:d}_rF.pt", "task": "blackboard-2d" },
 
-        # EOgar trained with TrainPos = true (augmentation-trained baseline)
-        { "name": "EOgar-1d-trainT", "path": "models/add/EOgar-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-2d-trainT", "path": "models/add/EOgar-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
+        # EOgar trained with TrainPos = true -> _rT.pt
+        { "name": "EOgar-1d-trainT", "path": "models/{operation}/EOgar-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-2d-trainT", "path": "models/{operation}/EOgar-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
     ],
 
-    # Evaluate on BOTH:
-    # - EvalPos=false (in-distribution for TrainPos=false)
-    # - EvalPos=true  (location randomization / generalization target)
+    # Evaluate on BOTH fixed and randomized positions, for each operation
     "bb_specs": [
+        # add
         { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
         { "height": 6, "width": 20, "randomize_position": "true",  "operation": "add" },
+
+        # sub
+        { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
+        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "sub" },
+
+        # mixed
+        { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
+        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "mixed" },
     ],
 
     "digits": [10],
@@ -53,14 +59,20 @@ def main(args):
 
                     run_name = (
                         f"{NAME}_{model['name']}"
+                        f"_Op{bb_spec['operation']}"
                         f"_EvalPos{bb_spec['randomize_position']}"
                         f"_d{digits}_s{seed}"
+                    )
+
+                    model_path = model["path"].format(
+                        seed=seed,
+                        operation=bb_spec["operation"],
                     )
 
                     flags = {
                         "name": run_name,
                         "model_name": model["name"],
-                        "model_path": model["path"].format(seed=seed),
+                        "model_path": model_path,
                         "task": model["task"],
 
                         "digits": digits,

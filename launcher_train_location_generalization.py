@@ -22,12 +22,19 @@ applicable_configs = {
         { "model_name": "EOgar", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
     ],
 
-    # Train BOTH:
-    # - TrainPos=false (fixed positions) for true generalization evaluation later
-    # - TrainPos=true  (randomized positions) as an "augmentation-trained" baseline
+    # Train BOTH fixed + randomized positions for each operation
     "bb_specs": [
+        # add
         { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
         { "height": 6, "width": 20, "randomize_position": "true",  "operation": "add" },
+
+        # sub
+        { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
+        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "sub" },
+
+        # mixed
+        { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
+        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "mixed" },
     ],
 
     "entropy_coeff": [0.5],
@@ -56,6 +63,7 @@ def main(args):
 
                                                 run_name = (
                                                     f"{NAME}_{model_name}"
+                                                    f"_Op{bb_spec['operation']}"
                                                     f"_TrainPos{bb_spec['randomize_position']}"
                                                     f"_d{digits}_s{seed}"
                                                 )
