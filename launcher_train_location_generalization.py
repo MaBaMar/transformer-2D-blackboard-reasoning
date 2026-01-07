@@ -25,16 +25,16 @@ applicable_configs = {
     # Train BOTH fixed + randomized positions for each operation
     "bb_specs": [
         # add
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
-        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "add" },
+        { "height": 8, "width": 20, "randomize_position": "false", "operation": "add" },
+        { "height": 8, "width": 20, "randomize_position": "true",  "operation": "add" },
 
         # sub
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
-        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "sub" },
+        { "height": 8, "width": 20, "randomize_position": "false", "operation": "sub" },
+        { "height": 8, "width": 20, "randomize_position": "true",  "operation": "sub" },
 
         # mixed
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
-        { "height": 6, "width": 20, "randomize_position": "true",  "operation": "mixed" },
+        { "height": 8, "width": 20, "randomize_position": "false", "operation": "mixed" },
+        { "height": 8, "width": 20, "randomize_position": "true",  "operation": "mixed" },
     ],
 
     "entropy_coeff": [0.5],
