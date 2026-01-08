@@ -6,13 +6,14 @@ import re
 import numpy as np
 
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
 
 from src.evaluation.gptbase_wrapper import GPTBaseWrapper
 from src.models.eogar import EOgar
 from projectlib.my_datasets import *
 from projectlib.my_datasets.collators import collate_bb_state_int, make_collator_with_args
+from projectlib.my_datasets.blackboards import CarryOperation
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
 from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY
 from src.training.train_gptbase import _SP_OP_REGISTRY
@@ -283,7 +284,7 @@ def experiment(
     #   Load the model and the dataset
     #
 
-    print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
+    print(f"Evaluating {model_name} on {task} with {digits}-digits and randomize_position: {bb_rand_pos}\n")
 
     bb_spec = BlackboardSpec(bb_height, bb_width, bb_rand_pos, Addition() if operation == "add" else Subtraction())
     pipe, tok = setup_model(
@@ -348,7 +349,7 @@ def main(args):
         batch_size=args.batch_size,
         bb_height=args.height,
         bb_width=args.width,
-        bb_rand_pos=args.bb_randomize_position,
+        bb_rand_pos=args.randomize_position,
         operation=args.operation,
         seed=args.seed,
         logging=args.logging,
@@ -367,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--height", type=int)
     parser.add_argument("--width", type=int)
-    parser.add_argument("--bb_randomize_position", action="store_true", default=False)
+    parser.add_argument("--randomize_position", action="store_true", default=False)
     parser.add_argument("--operation", type=str, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
