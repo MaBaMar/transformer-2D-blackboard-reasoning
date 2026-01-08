@@ -470,7 +470,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--bb_height", type=int)
     parser.add_argument("--bb_width", type=int)
-    parser.add_argument("--bb_randomize_position", type=str)
+    parser.add_argument("--bb_randomize_position", action="store_true", default=False)
     parser.add_argument("--operation", type=str)
     parser.add_argument("--model_dimension", type=int)
     parser.add_argument("--num_heads_encoder", type=int)
