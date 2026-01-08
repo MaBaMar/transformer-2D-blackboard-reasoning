@@ -9,7 +9,18 @@ MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 5
+NUM_SEEDS = 1
+
+# exp mixer generator
+def mix(l1, l2, l3):
+    for i in l1:
+        for j in l2:
+            for k in l3:
+                yield (i, j, k)
+
+bb_board_sizes = [(8, 20), (8, 25), (8, 30)]
+operations = ["add"] # TODO: later add sub and mixed
+randomize_position = [True, False]
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
@@ -24,17 +35,7 @@ applicable_configs = {
 
     # Train BOTH fixed + randomized positions for each operation
     "bb_specs": [
-        # add
-        { "height": 8, "width": 20, "randomize_position": "false", "operation": "add" },
-        { "height": 8, "width": 20, "randomize_position": "true",  "operation": "add" },
-
-        # sub
-        { "height": 8, "width": 20, "randomize_position": "false", "operation": "sub" },
-        { "height": 8, "width": 20, "randomize_position": "true",  "operation": "sub" },
-
-        # mixed
-        { "height": 8, "width": 20, "randomize_position": "false", "operation": "mixed" },
-        { "height": 8, "width": 20, "randomize_position": "true",  "operation": "mixed" },
+        *[{ "height": x[0], "width": x[1], "randomize_position": y, "operation": z } for x,y,z in mix(bb_board_sizes, randomize_position, operations)]
     ],
 
     "entropy_coeff": [0.5],
@@ -65,6 +66,7 @@ def main(args):
                                                     f"{NAME}_{model_name}"
                                                     f"_Op{bb_spec['operation']}"
                                                     f"_TrainPos{bb_spec['randomize_position']}"
+                                                    f"_BDimH{bb_spec['height']}W{bb_spec['width']}"
                                                     f"_d{digits}_s{seed}"
                                                 )
 
@@ -95,6 +97,8 @@ def main(args):
 
                                                     "seed": seed,
                                                     "logging": LOGGING,
+
+                                                    "model_save_path_suffix": f"_op{bb_spec['operation']}_H{bb_spec['height']}W{bb_spec['width']}"
                                                 }
 
                                                 cmd = generate_base_command(experiment, flags=flags)

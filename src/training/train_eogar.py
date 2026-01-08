@@ -111,6 +111,7 @@ def train(
         use_lr_scheduler: bool,
         warmup_steps: int,
         num_sched_cycles: float,
+        model_save_path_suffix: str,
         logging: str = "local",
     ):
 
@@ -170,6 +171,7 @@ def train(
         bb_dataset_test = ConcatDataset(ds_test)
 
         pad_id = ds_train[0].bb_2D_tokenizer.pad_id
+        vocab_size = ds_train[0].bb_2D_tokenizer.vocab_size
 
     else:
         bb_spec = BlackboardSpec(
@@ -196,9 +198,9 @@ def train(
         )
 
         pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
+        vocab_size = bb_full_dataset_train.bb_2D_tokenizer.vocab_size
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    vocab_size = bb_full_dataset_train.bb_2D_tokenizer.vocab_size
 
     collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=pad_id, device=device)
 
@@ -336,7 +338,7 @@ def train(
             # Check if model has the entropy loss attribute and log it if present
             if getattr(model, "last_ent_loss", None) is not None:
                 log_dict["entropy_loss"] = model.last_ent_loss.item()
-            
+
             wandb.log(log_dict)
             # --- MONITORING UPDATE END ---
 
@@ -387,18 +389,18 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}_r{"T" if bb_spec.randomize_position else "F"}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}_r{'T' if bb_spec.randomize_position else 'F'}{model_save_path_suffix}.pt")
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
             "train_size": train_size,
             "digits": digits,
             "batch_size": batch_size,
-            "bb_spec": { 
-                "height": bb_spec.height, 
-                "width": bb_spec.width, 
-                "randomize_position": bb_spec.randomize_position, 
-                "operation": bb_operation, 
+            "bb_spec": {
+                "height": bb_spec.height,
+                "width": bb_spec.width,
+                "randomize_position": bb_spec.randomize_position,
+                "operation": bb_operation,
             },
             "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
@@ -448,7 +450,8 @@ def main(args):
         logging=args.logging,
         use_lr_scheduler=args.use_lr_scheduler,
         warmup_steps=args.warmup_steps,
-        num_sched_cycles=args.num_sched_cycles
+        num_sched_cycles=args.num_sched_cycles,
+        model_save_path_suffix=args.model_save_path_suffix
     )
 
 
@@ -484,6 +487,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_lr_scheduler", action="store_true", default=False)
     parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
     parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
+    parser.add_argument("--model_save_path_suffix", type=str, default="")
 
     args = parser.parse_args()
     main(args)
