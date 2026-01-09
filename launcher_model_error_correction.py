@@ -1,11 +1,11 @@
 import argparse
 
-from src.training import train_eogar_old as experiment
+from src.training import train_eogar_correction as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "Training_params_EOgar"
+NAME = "Modelsize_EOgar"
 MODE = "euler"      # "local", "euler"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
@@ -18,14 +18,38 @@ NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
-    "digits": [8],
-    "train_sizes": [2048, 4096, 8192],
+    "digits": [4, 8, 12],
+    "train_sizes": [16384],
     "test_sizes": [1024],
     "batch_size": [64],
+
     "model_spec": [
-        { "model_name": "EOgar-100K", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-400K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar-800K", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        # Vary encoder blocks
+        # { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d32-h4-b16", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+        # { "model_name": "EOgar-d32-h4-b32", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 32 },
+        
+        # { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d64-h4-b16", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 16 },
+
+        # # Vary number of heads
+        # { "model_name": "EOgar-d32-h4-b4", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h16-b4", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h32-b4", "model_dimension": 32, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d32-h64-b4", "model_dimension": 32, "num_heads_encoder": 64, "n_encoder_blocks": 4 },
+        
+        # { "model_name": "EOgar-d64-h4-b4", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h16-b4", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 4 },
+        # { "model_name": "EOgar-d64-h32-b4", "model_dimension": 64, "num_heads_encoder": 32, "n_encoder_blocks": 4 },
+
+        # # Vary both
+        # { "model_name": "EOgar-d32-h8-b8", "model_dimension": 32, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
+        # { "model_name": "EOgar-d32-h16-b16", "model_dimension": 32, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
+
+        # { "model_name": "EOgar-d64-h8-b8", "model_dimension": 64, "num_heads_encoder": 8, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar-d64-h16-b16", "model_dimension": 64, "num_heads_encoder": 16, "n_encoder_blocks": 16 },
     ],
     "bb_specs": [
         { "height": 8, "width": 16, "randomize_position": "false", "operation": "addition" },
@@ -33,7 +57,10 @@ applicable_configs = {
     ],
     "rope_mode": ["2d"],
     "learning_rate": [1e-3],
-    "epochs": [6, 8, 10],
+    "error_pool_fraction": [0.5],
+    "errors_per_epoch": [4096],
+    "error_correction": [True],
+    "epochs": [8],
 }
 
 def main(args):
@@ -50,7 +77,7 @@ def main(args):
                                         for seed in applicable_configs["seed"]:
                                             flags = {
                                                 "name": NAME,
-                                                "model_name": model_spec["model_name"] + f"-{rope_mode}",
+                                                "model_name": model_spec["model_name"],
                                                 "digits": digits,
                                                 "train_size": train_size,
                                                 "test_size": test_size,
@@ -66,6 +93,9 @@ def main(args):
                                                 "rope_mode": rope_mode,
                                                 "learning_rate": learning_rate,
                                                 "epochs": epochs,
+                                                "error_pool_fraction": error_pool_fraction,
+                                                "errors_per_epoch": errors_per_epoch,
+                                                "error_correction": error_correction,
                                                 "seed": seed,
                                                 "logging": LOGGING,
                                             }

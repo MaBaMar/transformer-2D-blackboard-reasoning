@@ -1,6 +1,6 @@
 import argparse
 
-from src.training import train_eogar as experiment
+from src.training import train_eogar_old as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
 
 
