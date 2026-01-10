@@ -9,7 +9,7 @@ NAME = "OoD_Train_EOgar"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 8192
+EVAL_SIZE = 16384
 NUM_SEEDS = 5
 
 #
@@ -19,7 +19,7 @@ NUM_SEEDS = 5
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "digits": [10],
-    "train_sizes": [8192],
+    "train_sizes": [16384],
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
@@ -28,12 +28,12 @@ applicable_configs = {
         # { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
     ],
     "bb_specs": [
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
-        # { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
-        # { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
+        { "height": 6, "width": 20, "randomize_position": True, "operation": "add" },
+        # { "height": 6, "width": 20, "randomize_position": True, "operation": "sub" },
+        # { "height": 6, "width": 20, "randomize_position": True, "operation": "mixed" },
     ],
     "entropy_coeff": [0.5],
-    "rope_mode": ["1d"], # ["1d", "2d"],
+    "rope_mode": ["1d", "2d"],
     "learning_rate": [1e-3],
     "epochs": [10],
 }
@@ -72,6 +72,8 @@ def main(args):
                                                     "epochs": epochs,
                                                     "seed": seed,
                                                     "logging": LOGGING,
+
+                                                    "model_save_path_suffix": f"_op{bb_spec['operation']}",
                                                 }
                                                 cmd = generate_base_command(experiment, flags=flags)
                                                 command_list.append(cmd)

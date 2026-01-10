@@ -193,10 +193,11 @@ class GeneratedDataset(Dataset, ABC):
 
         values = list(zip(xs, ys))
 
-        for i in range(len(values)):
-            x, y = values[i]
-            if x < y:
-                values[i] = y, x
+        if disallow_permutations:
+            for i in range(len(values)):
+                x, y = values[i]
+                if x < y:
+                    values[i] = y, x
 
         values = list(set(values))
 

@@ -9,7 +9,7 @@ NAME = "OoD_Train_CoT"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 8192
+EVAL_SIZE = 16384
 NUM_SEEDS = 5
 
 #
@@ -19,7 +19,7 @@ NUM_SEEDS = 5
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "digits": [10],
-    "train_sizes": [8192],
+    "train_sizes": [16384],
     "test_sizes": [1024],
     "batch_size": [8],
     "model_spec": [
@@ -53,7 +53,7 @@ def main(args):
                                                 "test_size": test_size,
                                                 "eval_size": EVAL_SIZE,
                                                 "batch_size": batch_size,
-                                                "dataset_variant": dataset_variant, 
+                                                "dataset_variant": dataset_variant,
                                                 "operation": operation,
                                                 "max_context_length": 400,
                                                 "max_output_length": 400,
@@ -64,6 +64,8 @@ def main(args):
                                                 "epochs": epochs,
                                                 "seed": seed,
                                                 "logging": LOGGING,
+
+                                                "model_save_path_suffix": f"_op{operation}",
                                             }
                                             cmd = generate_base_command(experiment, flags=flags)
                                             command_list.append(cmd)

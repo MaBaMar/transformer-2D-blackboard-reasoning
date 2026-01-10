@@ -6,13 +6,15 @@ import re
 import numpy as np
 
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
 
 from src.evaluation.gptbase_wrapper import GPTBaseWrapper
 from src.models.eogar import EOgar
 from projectlib.my_datasets import *
 from projectlib.my_datasets.collators import collate_bb_state_int, make_collator_with_args
+from projectlib.my_datasets.scratchpads import Operation
+from projectlib.my_datasets._blackboard_operands import CarryOperation
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
 from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY
 
@@ -162,7 +164,7 @@ def load_dataset(task: str,
                 height=bb_height,
                 width=bb_width,
                 randomize_position=bb_rand_pos,
-                operation=BB_OPERATION[bb_operation],
+                operation=BB_OPERATION[operation],
             )
 
             dataset = TokenizedBlackboardDataset(
@@ -353,7 +355,7 @@ def main(args):
         batch_size=args.batch_size,
         bb_height=args.height,
         bb_width=args.width,
-        bb_rand_pos=args.randomize_position=="true"
+        bb_rand_pos=args.randomize_position=="true",
         operation=args.operation,
         seed=args.seed,
         logging=args.logging,
