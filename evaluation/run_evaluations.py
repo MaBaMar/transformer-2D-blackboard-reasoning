@@ -7,6 +7,7 @@ import numpy as np
 
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
 
 from src.evaluation.gptbase_wrapper import GPTBaseWrapper
@@ -17,13 +18,8 @@ from projectlib.my_datasets.scratchpads import Operation
 from projectlib.my_datasets._blackboard_operands import CarryOperation
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
 from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY
+from src.training.train_gptbase import _SP_OP_REGISTRY
 
-
-
-_SP_OP_REGISTRY: dict[str, Operation] = {
-    "add": '+',
-    "sub": '-',
-}
 
 BB_OPERATION: dict[str, CarryOperation] = {
     "add": Addition(),
@@ -156,7 +152,7 @@ def load_dataset(task: str,
                 )
 
             dataset = ConcatDataset(ds)
-            
+
             pad_id = ds[0].bb_2D_tokenizer.pad_id
 
         else:
@@ -173,7 +169,7 @@ def load_dataset(task: str,
                 generation_spec=spec,
                 blackboard_spec=bb_spec,
             )
-            
+
             pad_id = dataset.bb_2D_tokenizer.pad_id
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -290,7 +286,7 @@ def experiment(
     #   Load the model and the dataset
     #
 
-    print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
+    print(f"Evaluating {model_name} on {task} with {digits}-digits and randomize_position: {bb_rand_pos}\n")
 
     bb_spec = BlackboardSpec(bb_height, bb_width, bb_rand_pos, Addition() if operation == "add" else Subtraction())
     pipe, tok = setup_model(
@@ -355,7 +351,7 @@ def main(args):
         batch_size=args.batch_size,
         bb_height=args.height,
         bb_width=args.width,
-        bb_rand_pos=args.randomize_position=="true",
+        bb_rand_pos=args.randomize_position,
         operation=args.operation,
         seed=args.seed,
         logging=args.logging,
@@ -374,8 +370,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--height", type=int)
     parser.add_argument("--width", type=int)
-    parser.add_argument("--randomize_position", type=str)
-    parser.add_argument("--operation", type=str)
+    parser.add_argument("--randomize_position", action="store_true", default=False)
+    parser.add_argument("--operation", type=str, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     args, _ = parser.parse_known_args()
