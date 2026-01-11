@@ -1,4 +1,4 @@
-import argparse
+import argparse 
 
 from src.training import train_eogar as experiment
 from evaluation.utils import generate_base_command, generate_run_commands
@@ -9,7 +9,7 @@ MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 1
+NUM_SEEDS = 10
 
 # exp mixer generator
 def mix(l1, l2, l3):
@@ -18,8 +18,8 @@ def mix(l1, l2, l3):
             for k in l3:
                 yield (i, j, k)
 
-bb_board_sizes = [(8, 20), (8, 25), (8, 30)]
-operations = ["add"] # TODO: later add sub and mixed
+bb_board_sizes = [(6, 20)]
+operations =  ["mixed"]# TODO: @LINO replace this with ["mixed"]
 randomize_position = [True, False]
 
 applicable_configs = {
@@ -35,7 +35,7 @@ applicable_configs = {
 
     # Train BOTH fixed + randomized positions for each operation
     "bb_specs": [
-        *[{ "height": x[0], "width": x[1], "randomize_position": y, "operation": z } for x,y,z in mix(bb_board_sizes, randomize_position, operations)]
+        *[{ "height": bb_size[0], "width": bb_size[1], "randomize_position": r, "operation": op } for bb_size, r, op in mix(bb_board_sizes, randomize_position, operations)]
     ],
 
     "entropy_coeff": [0.5],
