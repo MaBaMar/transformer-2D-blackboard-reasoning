@@ -10,7 +10,7 @@ LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
 BATCH_SIZE = 64
-NUM_SEEDS = 1
+NUM_SEEDS = 10
 
 # exp mixer generator
 def mix(l1, l2, l3):
@@ -19,8 +19,8 @@ def mix(l1, l2, l3):
             for k in l3:
                 yield (i, j, k)
 
-bb_board_sizes = [(8, 20), (8, 25), (8, 30)]
-operations = ["add"] # TODO: later add sub and mixed
+bb_board_sizes = [(6, 20)]
+operations = ["add", "sub"] # TODO: change to mixed
 randomize_position = [True, False]
 
 applicable_configs = {
