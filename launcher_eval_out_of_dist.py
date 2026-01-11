@@ -9,32 +9,26 @@ NAME = "OoD_Evaluation"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 16384    # Make sure that this matches with the one in the training launchers
+EVAL_SIZE = 8192    # Make sure that this matches with the one in the training launchers
 BATCH_SIZE = 64
-NUM_SEEDS = 5
+NUM_SEEDS = 10
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "models": [
         # CoT
-        # { "name": "CoT", "path": "models/add/CoT_d10_s{seed:d}.pt", "task": "cot" },
-        # { "name": "CoT", "path": "models/sub/CoT_d10_s{seed:d}.pt", "task": "cot" },
-        { "name": "CoT", "path": "models/mixed/CoT_d10_s{seed:d}.pt", "task": "cot" },
+        { "name": "CoT", "path": "models/CoT_d10_s{seed:d}_op{operation:s}.pt", "task": "cot" },
 
         # 1D-RoPE
-        # { "name": "EOgar-1d", "path": "models/add/EOgar-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
-        # { "name": "EOgar-1d", "path": "models/sub/EOgar-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
-        { "name": "EOgar-1d", "path": "models/mixed/EOgar-1d_d10_s{seed:d}_rT.pt", "task": "blackboard-1d" },
+        { "name": "EOgar-1d", "path": "models/EOgar-1d_d10_s{seed:d}_rT_op{operation:s}.pt", "task": "blackboard-1d" },
 
         # 2D-RoPE
-        # { "name": "EOgar-2d", "path": "models/add/EOgar-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
-        # { "name": "EOgar-2d", "path": "models/sub/EOgar-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
-        { "name": "EOgar-2d", "path": "models/mixed/EOgar-2d_d10_s{seed:d}_rT.pt", "task": "blackboard-2d" },
+        { "name": "EOgar-2d", "path": "models/EOgar-2d_d10_s{seed:d}_rT_op{operation:s}.pt", "task": "blackboard-2d" },
     ],
     "bb_specs": [
-        # { "height": 6, "width": 20, "randomize_position": "false", "operation": "add" },
-        # { "height": 6, "width": 20, "randomize_position": "false", "operation": "sub" },
-        { "height": 6, "width": 20, "randomize_position": "false", "operation": "mixed" },
+        { "height": 6, "width": 20, "randomize_position": False, "operation": "add" },
+        { "height": 6, "width": 20, "randomize_position": False, "operation": "sub" },
+        { "height": 6, "width": 20, "randomize_position": False, "operation": "mixed" },
     ],
     "digits": [10, 11, 12, 13],
 }
@@ -48,7 +42,7 @@ def main(args):
                     flags = {
                         "name": NAME,
                         "model_name": model["name"],
-                        "model_path": model["path"].format(seed=seed),
+                        "model_path": model["path"].format(seed=seed, operation=bb_spec["operation"]),
                         "task": model["task"],
                         "digits": digits,
                         "size": EVAL_SIZE,

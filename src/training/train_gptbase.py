@@ -80,6 +80,7 @@ def train(
     warmup_steps: int,
     num_sched_cycles: float,
     link_weights: bool,
+    model_save_path_suffix: str,
     logging: str = "local",
 ):
     if use_lr_scheduler:
@@ -294,7 +295,7 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}{model_save_path_suffix}.pt")
 
     model.save_to_path(
         save_path,
@@ -335,6 +336,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_lr_scheduler", action="store_true", default=False)
     parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
     parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
+    parser.add_argument("--model_save_path_suffix", type=str, default="")
 
     args = parser.parse_args()
     train(**vars(args))

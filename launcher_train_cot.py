@@ -9,8 +9,8 @@ NAME = "OoD_Train_CoT"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 16384
-NUM_SEEDS = 5
+EVAL_SIZE = 8192
+NUM_SEEDS = 10
 
 #
 #   Model parameters and corresponding sizes
@@ -19,7 +19,7 @@ NUM_SEEDS = 5
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "digits": [10],
-    "train_sizes": [16384],
+    "train_sizes": [8192],
     "test_sizes": [1024],
     "batch_size": [8],
     "model_spec": [

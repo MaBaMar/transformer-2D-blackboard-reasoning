@@ -9,8 +9,8 @@ NAME = "OoD_Train_EOgar"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
-EVAL_SIZE = 16384
-NUM_SEEDS = 5
+EVAL_SIZE = 8192
+NUM_SEEDS = 10
 
 #
 #   Model parameters and corresponding sizes
@@ -19,7 +19,7 @@ NUM_SEEDS = 5
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "digits": [10],
-    "train_sizes": [16384],
+    "train_sizes": [8192],
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
@@ -29,8 +29,8 @@ applicable_configs = {
     ],
     "bb_specs": [
         { "height": 6, "width": 20, "randomize_position": True, "operation": "add" },
-        # { "height": 6, "width": 20, "randomize_position": True, "operation": "sub" },
-        # { "height": 6, "width": 20, "randomize_position": True, "operation": "mixed" },
+        { "height": 6, "width": 20, "randomize_position": True, "operation": "sub" },
+        { "height": 6, "width": 20, "randomize_position": True, "operation": "mixed" },
     ],
     "entropy_coeff": [0.5],
     "rope_mode": ["1d", "2d"],
