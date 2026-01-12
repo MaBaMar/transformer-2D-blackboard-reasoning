@@ -114,7 +114,7 @@ def load_dataset(task: str,
                         split=Split.EVAL,
                         seed=seed,
                         generation_spec=spec,
-                        operand=_SP_OP_REGISTRY[op],
+                        operand=op,
                     )
                 )
 

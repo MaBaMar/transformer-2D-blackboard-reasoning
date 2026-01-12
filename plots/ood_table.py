@@ -1,14 +1,22 @@
+import argparse
+import os
+
 import pandas as pd
 import numpy as np
 import wandb as wb
 import matplotlib.pyplot as plt
+
 from datetime import datetime
 from tqdm import tqdm
 
 
 
-IMG_PATH = "images/"
-DATA_PATH = "data/"
+IMG_PATH = "./plots/images/"
+TBL_PATH = "./plots/tables/"
+DATA_PATH = "./plots/data/"
+DATA_FILE = "./plots/data/{file_name:s}.csv"
+
+
 
 #
 #   Get the data
@@ -18,7 +26,7 @@ def wandb_get_data(tag: str):
     print(f"Trying to load data with tag \"{tag}\"")
     api = wb.Api()
     runs = api.runs(
-        path="bongni/bachelor-thesis", 
+        path="blackboard-reasoning/blackboard-reasoning", 
         filters={"tags": {"$in": [tag]}}
     )
 
@@ -32,109 +40,132 @@ def wandb_get_data(tag: str):
         all_data.append(
             pd.concat(
                 [
-                    df_config, 
+                    df_config,
                     df_history
-                ], 
+                ],
                 axis=1
             )
         )
 
     data = pd.concat(all_data)
 
-    data.to_csv(f"./data/{tag}.csv", index=False)
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH)
+
+    data.to_csv(DATA_FILE.format(file_name=tag), index=False)
 
 
 
 def group_data(file_name):
-    data = pd.read_csv(f'./data/{file_name}.csv')
+    data = pd.read_csv(DATA_FILE.format(file_name=file_name))
 
-    grouped_data = data.groupby(["acquisition_function", "_step"], as_index=False)
+    grouped_data = data.groupby(["model", "digits", "operation"], as_index=False)
 
     # Calculate standard error for each group
-    variance_mean = grouped_data["variance"].mean().rename(columns={"variance": "variance_mean"})
-    entropy_mean = grouped_data["entropy"].mean().rename(columns={"entropy": "entropy_mean"})
-    variance_stddev = grouped_data["variance"].sem().rename(columns={"variance": "variance_stddev"})
-    entropy_stddev = grouped_data["entropy"].sem().rename(columns={"entropy": "entropy_stddev"})
+    acc_mean = grouped_data["accuracy"].mean().rename(columns={"accuracy": "acc_mean"})
+    acc_stddev = grouped_data["accuracy"].sem().rename(columns={"accuracy": "acc_stddev"})
 
-    merged = pd.merge(variance_mean, entropy_mean, on=['acquisition_function', '_step'])
-    merged = pd.merge(merged, variance_stddev, on=['acquisition_function', '_step'])
-    merged = pd.merge(merged, entropy_stddev, on=['acquisition_function', '_step'])
+    merged = pd.merge(acc_mean, acc_stddev, on=["model", "digits", "operation"])
 
     return merged
 
-def group_data_by_space(file_name):
-    data = pd.read_csv(f'./data/{file_name}.csv')
 
-    grouped_data = data.groupby(["acquisition_function", "space", "_step"], as_index=False)
-
-    # Calculate standard error for each group
-    variance_mean = grouped_data["variance"].mean().rename(columns={"variance": "variance_mean"})
-    entropy_mean = grouped_data["entropy"].mean().rename(columns={"entropy": "entropy_mean"})
-    variance_stddev = grouped_data["variance"].sem().rename(columns={"variance": "variance_stddev"})
-    entropy_stddev = grouped_data["entropy"].sem().rename(columns={"entropy": "entropy_stddev"})
-
-    merged = pd.merge(variance_mean, entropy_mean, on=['acquisition_function', "space", '_step'])
-    merged = pd.merge(merged, variance_stddev, on=['acquisition_function', "space", '_step'])
-    merged = pd.merge(merged, entropy_stddev, on=['acquisition_function', "space", '_step'])
-
-    return merged
 
 #
 #   Plot the results
 #
 
-FONTSIZE = 16
+def plot_performance(df):
+    digits = sorted(df["digits"].unique())
+    models = ["EOgar-2d", "EOgar-1d", "CoT"]
+    operations = ["add", "sub", "mixed"]
 
-FUNCTIONS = ['uncertainty_sampling', 'alternative', 'original', 'noisy']
-SPACES = ["2d-grid-overlapping", "2d-grid-disjoint", "2d-grid-target_in_sample", "2d-grid-sample_in_target"]
+    lines = []
 
-SPACE_TITLE = {
-    "2d-grid-overlapping":          "Overlapping",
-    "2d-grid-disjoint":             "Disjoint",
-    "2d-grid-target_in_sample":     "Target in Sample",
-    "2d-grid-sample_in_target":     "Sample in Target",
-}
+    lines.append(r"\begin{table}[t]")
+    lines.append(r"\caption{Mean accuracy and variation of the different architectures over addition, subtraction and mixed datasets. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}")
+    lines.append(r"\label{table:ood}")
+    lines.append(r"\vskip 0.15in")
+    lines.append(r"\begin{center}")
+    lines.append(r"\small")
+    lines.append(r"\begin{sc}")
 
-ALG_TITLE = {
-    "original":                     "ITL noiseless",
-    "alternative":                  "ITL noiseless alternative",
-    "noisy":                        "ITL",
-    "uncertainty_sampling":         "Uncertainty sampling",
-    "uniform_sampling":             "Uniform sampling"
-}
+    col_spec = "l" + "c" * len(digits)
+    lines.append(rf"\begin{{tabular}}{{{col_spec}}}")
+    lines.append(r"\toprule")
 
-FUNC_COLORS = {
-    'uncertainty_sampling' : 'gray', 
-    'alternative' : 'red', 
-    'original' : 'green', 
-    'noisy' : 'black'
-}
+    for model in models:
+        if model == models[0]:
+            header = (
+                r"\textbf{" + model + "}"
+                + " & "
+                + " & ".join(str(d) for d in digits)
+                + r" \\"
+            )
+            lines.append(header)
+        else:
+            lines.append(
+                rf"\multicolumn{{{len(digits)+1}}}{{l}}{{\textbf{{{model}}}}} \\"
+            )
 
-ALPHA = 0.15
+        lines.append(r"\midrule")
 
-def plotPerformance(fig, df, column: str):
-    for func in FUNCTIONS:
-        func_group = df.loc[df['acquisition_function'] == func]
+        for op in operations:
+            row = [op.capitalize()]
 
-        # Plot variance
-        fig.plot(
-            np.arange(100), 
-            func_group[f'{column}_mean'], 
-            label=ALG_TITLE[func], 
-            color=FUNC_COLORS[func]
-        )
-        
-        # Plot standard error
-        n = func_group.groupby('_step').size()[0]
-        fig.fill_between(
-            np.arange(100), 
-            func_group[f'{column}_mean'] - func_group[f'{column}_stddev'] / np.sqrt(n), 
-            func_group[f'{column}_mean'] + func_group[f'{column}_stddev'] / np.sqrt(n), 
-            color=FUNC_COLORS[func], 
-            alpha=ALPHA
-        )
+            for d in digits:
+                m = df[
+                    (df["model"] == model)
+                    & (df["operation"] == op)
+                    & (df["digits"] == d)
+                ]
 
-    # Set labels
-    fig.set_xlabel('Step', fontsize=FONTSIZE)
-    fig.set_ylabel(column.capitalize(), fontsize=FONTSIZE)
-    fig.set_title(f'{column.capitalize()} of Acquisition Functions', fontsize=FONTSIZE)
+                if len(m) == 1:
+                    mean = m["acc_mean"].values[0] * 100
+                    std = m["acc_stddev"].values[0] * 100
+                    cell = rf"\scriptsize{{{mean:.1f}$\sigma${std:.1f}}}"
+                else:
+                    cell = r"\scriptsize{--}"
+
+                row.append(cell)
+
+            lines.append(" & ".join(row) + r" \\")
+
+        lines.append(r"\midrule")
+
+    lines[-1] = r"\bottomrule"
+
+    lines.append(r"\end{tabular}")
+    lines.append(r"\end{sc}")
+    lines.append(r"\end{center}")
+    lines.append(r"\vskip -0.1in")
+    lines.append(r"\end{table}")
+
+    latex_table = "\n".join(lines)
+
+    if not os.path.exists(TBL_PATH):
+        os.makedirs(TBL_PATH)
+
+    with open(TBL_PATH + "ood_evaluation.txt", "w") as f:
+        f.write(latex_table)
+
+
+
+def main(args):
+    # Only download the data if the flag is set or there is no local data file
+    if args.download or not os.path.exists(DATA_FILE.format(file_name=args.tag)):
+        wandb_get_data(args.tag)
+
+    # Group and plot the data
+    data = group_data(args.tag)
+    plot_performance(data)
+
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tag", type=str, default="OoD_Evaluation")
+    parser.add_argument("--download", action="store_true")
+    args, _ = parser.parse_known_args()
+
+    main(args)

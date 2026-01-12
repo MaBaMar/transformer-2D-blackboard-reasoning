@@ -1,0 +1,32 @@
+\begin{table}[t]
+\caption{Mean accuracy and variation of the different architectures over addition, subtraction and mixed datasets. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}
+\label{table:ood}
+\vskip 0.15in
+\begin{center}
+\small
+\begin{sc}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{EOgar-2d} & 10 & 11 & 12 & 13 \\
+\midrule
+Add & \scriptsize{98.9$\sigma$0.5} & \scriptsize{88.7$\sigma$6.3} & \scriptsize{59.2$\sigma$10.3} & \scriptsize{36.2$\sigma$12.0} \\
+Sub & \scriptsize{99.0$\sigma$0.4} & \scriptsize{73.1$\sigma$9.8} & \scriptsize{44.8$\sigma$11.4} & \scriptsize{26.1$\sigma$9.4} \\
+Mixed & \scriptsize{73.9$\sigma$11.9} & \scriptsize{63.8$\sigma$10.8} & \scriptsize{36.1$\sigma$7.7} & \scriptsize{15.7$\sigma$4.5} \\
+\midrule
+\multicolumn{5}{l}{\textbf{EOgar-1d}} \\
+\midrule
+Add & \scriptsize{96.9$\sigma$1.8} & \scriptsize{59.0$\sigma$10.4} & \scriptsize{38.0$\sigma$12.9} & \scriptsize{18.8$\sigma$9.1} \\
+Sub & \scriptsize{98.5$\sigma$0.9} & \scriptsize{70.5$\sigma$9.4} & \scriptsize{40.1$\sigma$12.5} & \scriptsize{25.0$\sigma$10.7} \\
+Mixed & \scriptsize{66.6$\sigma$12.3} & \scriptsize{54.7$\sigma$13.4} & \scriptsize{30.4$\sigma$10.7} & \scriptsize{8.8$\sigma$3.3} \\
+\midrule
+\multicolumn{5}{l}{\textbf{CoT}} \\
+\midrule
+Add & \scriptsize{87.2$\sigma$2.7} & \scriptsize{18.5$\sigma$2.1} & \scriptsize{0.0$\sigma$0.0} & \scriptsize{0.0$\sigma$0.0} \\
+Sub & \scriptsize{60.2$\sigma$6.4} & \scriptsize{10.4$\sigma$2.3} & \scriptsize{0.1$\sigma$0.1} & \scriptsize{0.0$\sigma$0.0} \\
+Mixed & \scriptsize{39.6$\sigma$5.5} & \scriptsize{7.4$\sigma$1.6} & \scriptsize{0.0$\sigma$0.0} & \scriptsize{0.0$\sigma$0.0} \\
+\bottomrule
+\end{tabular}
+\end{sc}
+\end{center}
+\vskip -0.1in
+\end{table}
