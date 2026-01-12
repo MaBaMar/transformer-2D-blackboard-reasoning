@@ -10,7 +10,7 @@ MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192
-NUM_SEEDS = 10
+NUM_SEEDS = 5
 
 #
 #   Model parameters and corresponding sizes
@@ -24,13 +24,13 @@ applicable_configs = {
     "batch_size": [64],
     "model_spec": [
         # { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
+        { "model_name": "EOgar", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
         # { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
     ],
     "bb_specs": [
         { "height": 6, "width": 20, "randomize_position": True, "operation": "add" },
-        { "height": 6, "width": 20, "randomize_position": True, "operation": "sub" },
-        { "height": 6, "width": 20, "randomize_position": True, "operation": "mixed" },
+        # { "height": 6, "width": 20, "randomize_position": True, "operation": "sub" },
+        # { "height": 6, "width": 20, "randomize_position": True, "operation": "mixed" },
     ],
     "entropy_coeff": [0.5],
     "rope_mode": ["1d", "2d"],
@@ -52,7 +52,8 @@ def main(args):
                                         for epochs in applicable_configs["epochs"]:
                                             for seed in applicable_configs["seed"]:
                                                 flags = {
-                                                    "name": NAME,
+                                                    "name": NAME + f"_{rope_mode}_{seed}",
+                                                    "raw_name": NAME,
                                                     "model_name": model_spec["model_name"] + f"-{rope_mode}",
                                                     "digits": digits,
                                                     "train_size": train_size,
