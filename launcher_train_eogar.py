@@ -32,7 +32,7 @@ applicable_configs = {
         # { "height": 6, "width": 20, "randomize_position": True, "operation": "sub" },
         # { "height": 6, "width": 20, "randomize_position": True, "operation": "mixed" },
     ],
-    "entropy_coeff": [0.5],
+    "entropy_coeff": [0],
     "rope_mode": ["1d", "2d"],
     "learning_rate": [1e-3],
     "epochs": [10],

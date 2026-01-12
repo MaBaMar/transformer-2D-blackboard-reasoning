@@ -192,7 +192,7 @@ class EOgar(BBChainGenerator):
             pad_id=pad_id,
         )
 
-        self.apply(init_weights)
+        # self.apply(init_weights)
 
     def forward(
         self,
