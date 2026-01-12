@@ -20,7 +20,7 @@ def mix(l1, l2, l3):
                 yield (i, j, k)
 
 bb_board_sizes = [(6, 20)]
-operations = ["add", "sub"] # TODO: change to mixed
+operations = ["mixed"] # ["add", "sub"] # TODO: change to mixed
 randomize_position = [True, False]
 
 applicable_configs = {
