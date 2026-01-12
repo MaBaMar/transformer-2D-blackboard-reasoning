@@ -20,7 +20,7 @@ def mix(l1, l2, l3):
                 yield (i, j, k)
 
 bb_board_sizes = [(6, 20)]
-operations = ["mixed"] # ["add", "sub"] # TODO: change to mixed
+operations = ["add", "sub"] # ["add", "sub"] # TODO: change to mixed
 randomize_position = [True, False]
 
 applicable_configs = {
@@ -32,7 +32,7 @@ applicable_configs = {
     # - EOgar trained on randomized positions (trainT -> _rT.pt)
     "models": [
         # EOgar trained with TrainPos = false  -> _rF.pt
-        { "name": "EOgar-1d", "path": "models/EOgar-1d_d10_s{seed:d}_r{rand}_op{operation}_H{height}W{width}.pt", "task": "blackboard-1d" },
+        # { "name": "EOgar-1d", "path": "models/EOgar-1d_d10_s{seed:d}_r{rand}_op{operation}_H{height}W{width}.pt", "task": "blackboard-1d" },
         { "name": "EOgar-2d", "path": "models/EOgar-2d_d10_s{seed:d}_r{rand}_op{operation}_H{height}W{width}.pt", "task": "blackboard-2d" },
     ],
 
