@@ -53,7 +53,7 @@ def main(args):
                                             for seed in applicable_configs["seed"]:
                                                 flags = {
                                                     "name": NAME + f"_{rope_mode}_{seed}",
-                                                    "raw_name": NAME,
+                                                    # "raw_name": NAME,
                                                     "model_name": model_spec["model_name"] + f"-{rope_mode}",
                                                     "digits": digits,
                                                     "train_size": train_size,
