@@ -24,6 +24,32 @@ from torch import nn
 from projectlib.transformer.tpe2d_model import TwoDTPERoPEAttention, FeedForward, OutputHead
 from projectlib.wrappertypes import BBChainGenerator
 
+def init_weights(module):
+    # 1. Handle all Linear layers (Projections, FFN, Router)
+    if isinstance(module, nn.Linear):
+        std = 0.02 # Base stable standard deviation
+
+        # Apply Depth/Residual Scaling
+        if hasattr(module, "_is_residual"):
+            print("[adjust init] is_residual")
+            std = std / (2 * 4) ** 0.5
+
+        torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+        if module.bias is not None:
+            torch.nn.init.zeros_(module.bias)
+
+    # 2. Handle the Embedding Layer
+    elif isinstance(module, nn.Embedding):
+        print("[adjust init] embedding")
+        torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    # 3. Handle the Special Case: The Router Down-Projection
+    # We check the parent module's type or the specific layer name
+    # This ensures the router starts perfectly balanced
+    if hasattr(module, 'router_down'):
+        print("[adjust init] router")
+        torch.nn.init.normal_(module.router_down.weight, std=0.001)
+
 @final  # affects typechecker only
 class Encoder(nn.Module):
     def __init__(
@@ -96,6 +122,7 @@ class Encoder(nn.Module):
             self.dropout = nn.Dropout(dropout)
             self.attn = TwoDTPERoPEAttention(d_model, num_heads, dropout, use_causal_mask=False)
             self.ffn = FeedForward(d_model, 4 * d_model, dropout)
+            self.ffn._is_residual = True
 
         def forward(
             self,
@@ -108,7 +135,7 @@ class Encoder(nn.Module):
             h = self.ln1(x)
 
             h_attn, ent_loss = self.attn(h, pos_row, pos_col, key_padding_mask=key_padding_mask)
-            
+
             x = x + self.dropout(h_attn)
 
             # pre-norm + FFN
@@ -164,6 +191,8 @@ class EOgar(BBChainGenerator):
             d_model=d_model,
             pad_id=pad_id,
         )
+
+        self.apply(init_weights)
 
     def forward(
         self,

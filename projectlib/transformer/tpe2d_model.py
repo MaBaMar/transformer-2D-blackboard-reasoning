@@ -224,6 +224,7 @@ class TwoDTPERoPEAttention(nn.Module):
         self.v_proj = nn.Linear(d_model, d_model)
         self.o_proj = nn.Linear(d_model, d_model)
 
+        self.o_proj._is_residual = True
         self.attn_dropout = nn.Dropout(dropout)
 
         # Router MLP: per-head, per-token mixing between row/col.

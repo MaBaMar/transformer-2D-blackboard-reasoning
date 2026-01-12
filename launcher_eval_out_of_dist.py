@@ -30,7 +30,7 @@ applicable_configs = {
         # { "height": 6, "width": 20, "randomize_position": False, "operation": "sub" },
         # { "height": 6, "width": 20, "randomize_position": False, "operation": "mixed" },
     ],
-    "digits": [11, 12, 13],
+    "digits": [10, 11, 12, 13],
 }
 
 def main(args):

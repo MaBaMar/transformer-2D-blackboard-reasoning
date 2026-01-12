@@ -258,7 +258,7 @@ def experiment(
     wandb.init(
         name=name,
         entity="blackboard-reasoning",
-        project="mini_test_deeper_models",
+        project="check_weights",
         config={
             "model": model_name,
             "task": task,

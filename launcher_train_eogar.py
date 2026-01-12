@@ -24,7 +24,7 @@ applicable_configs = {
     "batch_size": [64],
     "model_spec": [
         # { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
-        { "model_name": "EOgar", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
+        { "model_name": "EOgar", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
         # { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
     ],
     "bb_specs": [
