@@ -11,13 +11,13 @@ LOGGING = "wandb"   # "wandb", "local", "none"
 
 EVAL_SIZE = 8192    # Make sure that this matches with the one in the training launchers
 BATCH_SIZE = 64
-NUM_SEEDS = 10
+NUM_SEEDS = 5
 
 applicable_configs = {
     "seed": [i for i in range(NUM_SEEDS)],
     "models": [
         # CoT
-        { "name": "CoT", "path": "models/CoT_d10_s{seed:d}_op{operation:s}.pt", "task": "cot" },
+        # { "name": "CoT", "path": "models/CoT_d10_s{seed:d}_op{operation:s}.pt", "task": "cot" },
 
         # 1D-RoPE
         { "name": "EOgar-1d", "path": "models/EOgar-1d_d10_s{seed:d}_rT_op{operation:s}.pt", "task": "blackboard-1d" },
@@ -27,10 +27,10 @@ applicable_configs = {
     ],
     "bb_specs": [
         { "height": 6, "width": 20, "randomize_position": False, "operation": "add" },
-        { "height": 6, "width": 20, "randomize_position": False, "operation": "sub" },
-        { "height": 6, "width": 20, "randomize_position": False, "operation": "mixed" },
+        # { "height": 6, "width": 20, "randomize_position": False, "operation": "sub" },
+        # { "height": 6, "width": 20, "randomize_position": False, "operation": "mixed" },
     ],
-    "digits": [10, 11, 12, 13],
+    "digits": [11, 12, 13],
 }
 
 def main(args):
