@@ -30,7 +30,7 @@ def check(train = False):
         high = 10**12
     )
 
-    bb_spec = BlackboardSpec(5, 15, False, Addition())
+    bb_spec = BlackboardSpec(5, 20, False, Addition())
 
     bb_dataset = TokenizedBlackboardDataset(regenerate=False, generation_spec=spec, blackboard_spec=bb_spec, split=Split.TRAIN)
     # exit(-1)
@@ -130,31 +130,31 @@ def check(train = False):
     print("Result is: ", st.result)
 
 
-    # st = reasoner.compute_from_operands(5, 19)
-    # st.show_steps()
-    # print("Result is: ", st.result)
+    st = reasoner.compute_from_operands(5, 19)
+    st.show_steps()
+    print("Result is: ", st.result)
 
-    # st = reasoner.compute_from_operands(241, 389)
-    # st.show_steps()
-    # print("Result is: ", st.result)
+    st = reasoner.compute_from_operands(241, 389)
+    st.show_steps()
+    print("Result is: ", st.result)
 
 
-    # st = reasoner.compute_from_operands(150, 280)
-    # st.show_steps()
+    st = reasoner.compute_from_operands(150, 280)
+    st.show_steps()
 
-    # st = reasoner.compute_from_operands(909, 256)
-    # st.show_steps()
+    st = reasoner.compute_from_operands(909, 256)
+    st.show_steps()
 
-    # for i, [x, _] in enumerate(data_loader):
-    #     chainlist = reasoner.compute_from_databatch(x)
-    #     print(chainlist_to_results(chainlist))
+    for i, [x, _] in enumerate(data_loader):
+        chainlist = reasoner.compute_from_databatch(x)
+        print(chainlist_to_results(chainlist))
 
-        # for chain in chainlist:
-        #     chain.show_steps()
+        for chain in chainlist:
+            chain.show_steps()
 
 if __name__ == "__main__":
 
     logging.basicConfig()
-    # logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.DEBUG)
 
-    check(False)
+    check(True)

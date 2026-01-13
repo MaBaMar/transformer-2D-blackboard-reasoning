@@ -47,7 +47,18 @@ if __name__ == "__main__":
 
     test_loader = DataLoader(dataset_test, batch_size=batch_size, shuffle=False)
 
-    model: GPTStyleBaseline = GPTStyleBaseline.load_from_path("./models/cot_test-bound_weights_d12_s0.pt")
+    model: GPTStyleBaseline = GPTStyleBaseline.load_from_path("./models/PATH_TO_SOME_PRETRAINED_MODEL_TO_INSPECT.pt")
+    # model: GPTStyleBaseline = GPTStyleBaseline(
+    #     vocab_size=tokenizer.vocab_size,
+    #     max_seq_len=400,
+    #     d_model=64,
+    #     num_heads=4,
+    #     num_blocks=4,
+    #     token_config=tokenizer.get_token_config(),
+    #     max_inference_steps=400,
+    #     use_weight_linking=True
+    # )
+    model.to(device)
     model.eval()
 
     sample_inspect_count = 2
