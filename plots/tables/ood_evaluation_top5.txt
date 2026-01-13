@@ -1,0 +1,20 @@
+\begin{table}[t]
+\caption{Mean accuracy and standard deviation of the different architectures on the addition dataset, where only the five seeds leading to the best accuracy are chosen for each model respectively. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}
+\label{table:ood_top5}
+\vskip 0.15in
+\begin{center}
+\small
+\begin{sc}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & 10 & 11 & 12 & 13 \\
+\midrule
+EOgar-2d & \scriptsize{99.9$\pm$0.1} & \scriptsize{99.3$\pm$0.7} & \scriptsize{87.5$\pm$10.3} & \scriptsize{66.7$\pm$29.8} \\
+EOgar-1d & \scriptsize{99.8$\pm$0.2} & \scriptsize{87.7$\pm$14.3} & \scriptsize{71.5$\pm$29.0} & \scriptsize{37.5$\pm$31.3} \\
+CoT & \scriptsize{94.7$\pm$2.0} & \scriptsize{23.2$\pm$0.9} & \scriptsize{0.0$\pm$0.0} & \scriptsize{0.0$\pm$0.0} \\
+\bottomrule
+\end{tabular}
+\end{sc}
+\end{center}
+\vskip -0.1in
+\end{table}
