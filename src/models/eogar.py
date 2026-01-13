@@ -6,16 +6,12 @@
 # Purpose: Full model implementation based on 2D rope and autoregressive reasoning step
 # generation for additions and subtractions
 #
-# Name: Toy name, feel free to change it to sth fancy
-#
 # ADDITION (entropy regularization):
-#   - EOgar.forward still returns (logits, loss) so your training loop is unchanged.
 #   - If entropy_coef > 0, we add: loss_total = loss_CE + entropy_coef * loss_entropy
 #   - loss_entropy is aggregated from ent_loss returned by TwoDTPERoPEAttention in each block.
-#   - For logging without changing the training loop, we expose:
-#       self.last_ent_loss  (None if not computed)
 # ------------------------------------------------------------
 
+import json
 from typing import Optional, final, Tuple, List
 import torch
 from torch import nn
@@ -301,7 +297,7 @@ class EOgar(BBChainGenerator):
         config = checkpoint["config"]
 
         vocab_size = config["vocab_size"]
-        d_model = config["d_model"]
+        d_model = config["model_dimension"]
         num_heads_encoder = config["num_heads_encoder"]
         n_encoder_blocks = config["n_encoder_blocks"]
         pad_id = config["pad_id"]
@@ -318,8 +314,12 @@ class EOgar(BBChainGenerator):
             pad_id=pad_id,
             rope_mode=rope_mode,
             entropy_coef=entropy_coef,
-        )
+        ).to(device)
 
         model.load_state_dict(checkpoint["model_state_dict"])
+
+
+        print("Loaded model with configuration:")
+        print(json.dumps(config, indent=4))
 
         return model

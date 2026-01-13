@@ -8,3 +8,5 @@ pip install wandb
 pip install tqdm
 pip install transformers
 pip install pandas
+pip install -e ./projectlib
+pip install pytest

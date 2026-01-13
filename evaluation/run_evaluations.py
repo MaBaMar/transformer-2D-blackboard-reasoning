@@ -1,3 +1,17 @@
+# ------------------------------------------------------------
+# run_evaluations.py
+#
+# Run the evaluation pipeline for the different models that are supported.
+#
+# Supported models:
+#       - scratchpad
+#       - cot
+#       - blackboard-1d
+#       - blackboard-2d
+#
+# Run using the corresponding launcher script
+# ------------------------------------------------------------
+
 import argparse
 import torch
 import wandb
@@ -6,22 +20,24 @@ import re
 import numpy as np
 
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
 
 from src.evaluation.gptbase_wrapper import GPTBaseWrapper
 from src.models.eogar import EOgar
 from projectlib.my_datasets import *
 from projectlib.my_datasets.collators import collate_bb_state_int, make_collator_with_args
+from projectlib.my_datasets.scratchpads import Operation
+from projectlib.my_datasets._blackboard_operands import CarryOperation
 from src.evaluation.bb_chain_wrapper import BBChainReasoner, chainlist_to_results
 from src.models.gptbase import GPTBaseTokenizer, GPTStyleBaseline, _DATA_T_REGISTRY
+from src.training.train_gptbase import _SP_OP_REGISTRY
 
 
-
-MODEL_PATHS = {
-    "Llama-13B": "TheBloke/LLaMA-13b-GGUF",
-    "Llama-8B": "meta-llama/Meta-Llama-3-8B",
-    "Llama-1B": "meta-llama/Llama-Guard-3-1B",
+BB_OPERATION: dict[str, CarryOperation] = {
+    "add": Addition(),
+    "sub": Subtraction(),
 }
 
 
@@ -67,7 +83,7 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
         tok = BBVocabTokenizer()
         model = EOgar.load_from_path(model_path)
 
-        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
+        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=2 * digits + 2, tokenizer=tok)
 
         return reasoner, tok
 
@@ -75,7 +91,7 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
         tok = BBVocabTokenizer()
         model = EOgar.load_from_path(model_path)
 
-        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=digits+2)
+        reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=2 * digits + 2, tokenizer=tok)
 
         return reasoner, tok
 
@@ -84,7 +100,15 @@ def setup_model(model_path, digits: int, bb_spec: BlackboardSpec, task: str, dev
 
 
 
-def load_dataset(task: str, size: int, digits: int, bb_spec: BlackboardSpec, seed: int, batch_size: int = 1) -> DataLoader:
+def load_dataset(task: str,
+                 size: int,
+                 digits: int,
+                 bb_height: int,
+                 bb_width: int,
+                 bb_rand_pos: bool,
+                 operation: str,
+                 seed: int,
+                 batch_size: int = 1) -> DataLoader:
     spec = GenerationSpec(
         low=10**(digits - 1),
         high=10**(digits),
@@ -92,33 +116,77 @@ def load_dataset(task: str, size: int, digits: int, bb_spec: BlackboardSpec, see
     )
 
     if task == "basic":
-        dataset = AdditionDataset(
-            split=Split.EVAL,
-            seed=seed,
-            generation_spec=spec,
-        )
-
-        return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        raise NotImplementedError("Implement basic!")
 
     elif task == "scratchpad" or task == "cot":
-        dataset = _DATA_T_REGISTRY[task](
-            split=Split.EVAL,
-            seed=seed,
-            generation_spec=spec,
-        )
+        if operation == "mixed":
+            ds = []
+
+            for op in _SP_OP_REGISTRY.values():
+                ds.append(
+                    _DATA_T_REGISTRY[task](
+                        split=Split.EVAL,
+                        seed=seed,
+                        generation_spec=spec,
+                        operand=op,
+                    )
+                )
+
+            dataset = ConcatDataset(ds)
+
+        else:
+            dataset = _DATA_T_REGISTRY[task](
+                split=Split.EVAL,
+                seed=seed,
+                generation_spec=spec,
+                operand=_SP_OP_REGISTRY[operation],
+            )
 
         return DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     elif task == "blackboard-1d" or task == "blackboard-2d":
-        dataset = TokenizedBlackboardDataset(
-            split=Split.EVAL,
-            seed=seed,
-            generation_spec=spec,
-            blackboard_spec=bb_spec,
-        )
+        if operation == "mixed":
+            ds = []
+
+            for op in BB_OPERATION.values():
+                bb_spec = BlackboardSpec(
+                    height=bb_height,
+                    width=bb_width,
+                    randomize_position=bb_rand_pos,
+                    operation=op,
+                )
+
+                ds.append(
+                    TokenizedBlackboardDataset(
+                        split=Split.EVAL,
+                        seed=seed,
+                        generation_spec=spec,
+                        blackboard_spec=bb_spec,
+                    )
+                )
+
+            dataset = ConcatDataset(ds)
+
+            pad_id = ds[0].bb_2D_tokenizer.pad_id
+
+        else:
+            bb_spec = BlackboardSpec(
+                height=bb_height,
+                width=bb_width,
+                randomize_position=bb_rand_pos,
+                operation=BB_OPERATION[operation],
+            )
+
+            dataset = TokenizedBlackboardDataset(
+                split=Split.EVAL,
+                seed=seed,
+                generation_spec=spec,
+                blackboard_spec=bb_spec,
+            )
+
+            pad_id = dataset.bb_2D_tokenizer.pad_id
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        pad_id = dataset.bb_2D_tokenizer.pad_id
 
         collate_fn = make_collator_with_args(collate_bb_state_int, pad_token_id=pad_id, device=device)
 
@@ -138,16 +206,6 @@ def ask(input, task, pipe, tok):
     if task == "basic":
         raise NotImplementedError("Implement basic!")
 
-        prompt = (f"Compute the sum. Answer with just the integer. \n Q: {input} = ? A:"    )
-        out = pipe(prompt, max_new_tokens=30 ,do_sample=False,
-                    truncation=True, pad_token_id=tok.pad_token_id,)[0]["generated_text"]
-        added = out[len(prompt):].strip()
-        m = re.search(r"-?\d+", added)
-        if m:
-            pred = int(m.group(0))
-        else:
-            return None
-
     elif task == "scratchpad" or task == "cot":
         pred = pipe.compute_from_databatch(input).results
 
@@ -165,7 +223,6 @@ def ask(input, task, pipe, tok):
 def check_prediction(prediction, label, task) -> int:
     if task == "basic":
         raise NotImplementedError("Implement basic!")
-        result_true = int(label[0])
 
     elif task in ["scratchpad", "cot", "blackboard-2d", "blackboard-1d"]:
         # we need to do sum, as the last batch might not be full (we have drop_last = False in the dataloader)
@@ -204,7 +261,10 @@ def experiment(
         size: int,
         batch_size: int,
         digits: int,
-        bb_spec: BlackboardSpec,
+        bb_height: int,
+        bb_width: int,
+        bb_rand_pos: bool,
+        operation: str,
         seed: int,
         logging: str = "local",
     ):
@@ -219,11 +279,12 @@ def experiment(
             "size": size,
             "batch_size": batch_size,
             "bb_spec": {
-                "height": bb_spec.height,
-                "width": bb_spec.width,
-                "randomize_position": bb_spec.randomize_position,
-                "operation": bb_spec.operation,
+                "height": bb_height,
+                "width": bb_width,
+                "randomize_position": bb_rand_pos,
+                "operation": operation,
             },
+            "operation": operation,
             "digits": digits,
             "seed": seed,
         },
@@ -239,8 +300,9 @@ def experiment(
     #   Load the model and the dataset
     #
 
-    print(f"Evaluating {model_name} on {task} with {digits}-digits\n")
+    print(f"Evaluating {model_name} on {task} with {digits}-digits and randomize_position: {bb_rand_pos}\n")
 
+    bb_spec = BlackboardSpec(bb_height, bb_width, bb_rand_pos, Addition() if operation == "add" else Subtraction())
     pipe, tok = setup_model(
         model_path=model_path,
         digits=digits,
@@ -253,7 +315,10 @@ def experiment(
         task=task,
         size=size,
         digits=digits,
-        bb_spec=bb_spec,
+        bb_height=bb_height,
+        bb_width=bb_width,
+        bb_rand_pos=bb_rand_pos,
+        operation=operation,
         seed=seed,
         batch_size=batch_size
     )
@@ -269,12 +334,12 @@ def experiment(
         if task in ["blackboard-1d", "blackboard-2d"]:
             input_text = element[0]
             label = element[-1]
-
         else:
             input_text = element["input"]
             label = element["label"]
 
-        prediction = ask(input_text, task, pipe, tok)
+        prediction = ask(input_text, task, pipe, tok).to(device)
+        label = label.to(device)
 
         correct += check_prediction(prediction, label, task)
         elem_count += len(label)
@@ -290,8 +355,6 @@ def experiment(
 
 
 def main(args):
-    bb_op = Addition() if args.operation == "addition" else None
-
     experiment(
         name=args.name,
         model_name=args.model_name,
@@ -300,7 +363,10 @@ def main(args):
         digits=args.digits,
         size=args.size,
         batch_size=args.batch_size,
-        bb_spec=BlackboardSpec(args.height, args.width, args.randomize_position, bb_op),
+        bb_height=args.height,
+        bb_width=args.width,
+        bb_rand_pos=args.randomize_position,
+        operation=args.operation,
         seed=args.seed,
         logging=args.logging,
     )
@@ -318,8 +384,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--height", type=int)
     parser.add_argument("--width", type=int)
-    parser.add_argument("--randomize_position", type=bool)
-    parser.add_argument("--operation", type=str)
+    parser.add_argument("--randomize_position", action="store_true", default=False)
+    parser.add_argument("--operation", type=str, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     args, _ = parser.parse_known_args()

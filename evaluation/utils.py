@@ -1,7 +1,31 @@
+# ------------------------------------------------------------
+# utils.py
+#
+# Utility functions that generate run commands for the cluster and local deployement.
+#
+# This file is adapted from:
+#   Project: Test-Time Training on Nearest Neighbors (TTT-NN)
+#   Original authors: Jonas Hübotter, Sascha Bongni, Ido Hakimi
+#   Source: https://github.com/lasgroup/tttlm
+#
+# Modifications by: Sascha Bongni
+# Changes:
+#   - Added support for the DINFK student cluster
+#   - Adapted the flags for running on Euler
+#
+# This file is based on code from a previous project completed in 2024.
+# I was a contributor to the original project.
+#
+# Original license: MIT License
+# ------------------------------------------------------------
+
+import getpass
 import glob
 import json
 import os
+import subprocess
 import sys
+import time
 from typing import Dict, Optional, Any, List
 
 import numpy as np
@@ -16,6 +40,27 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 RESULT_DIR = os.path.join(BASE_DIR, "results")
 
 CONDA_ENV = "dl"
+
+MAX_ACTIVE_JOBS = 2
+USER = getpass.getuser()
+
+
+
+""" Helper function """
+
+
+def count_active_jobs():
+    """
+    Count the number of active jobs of this user
+    """
+    cmd = ["squeue", "-u", USER, "-h"]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    lines = result.stdout.strip().splitlines()
+    
+    return len(lines)
+
+
 
 """ Custom Logger """
 
@@ -133,7 +178,7 @@ def generate_run_commands(
         if num_hours is None:
             num_hours = 23 if long else 3
         sbatch_cmd = (
-            "sbatch -A ls_krausea "
+            "sbatch "
             + f"--time={num_hours}:59:00 "
             + f"--mem-per-cpu={mem} "
             + f"-n {num_cpus} "
@@ -156,6 +201,40 @@ def generate_run_commands(
                 if dry:
                     print(cmd)
                 else:
+                    os.system(cmd)
+
+    elif mode == "dinfk":
+        cluster_cmds = []
+        if num_hours is None:
+            num_hours = 23 if long else 3
+        sbatch_cmd = (
+            "sbatch -A deep_learning "
+            + f"--time={num_hours}:59:00 "
+            + f"--mem-per-cpu={mem} "
+            + f"-n {num_cpus} "
+        )
+
+        if num_gpus > 0:
+            sbatch_cmd += f"--gpus=5060ti:{num_gpus} "
+
+        for python_cmd in command_list:
+            cluster_cmds.append(sbatch_cmd + f'--wrap="{python_cmd}"')
+
+        if promt:
+            answer = input(
+                f"About to submit {len(cluster_cmds)} compute jobs to the cluster. Proceed? [yes/no] "
+            )
+        else:
+            answer = "yes"
+        if answer == "yes" or answer == "y":
+            for cmd in cluster_cmds:
+                if dry:
+                    print(cmd)
+                else:
+                    while(count_active_jobs() >= MAX_ACTIVE_JOBS):
+                        print("Waiting for jobs in queue to finish ...")
+                        time.sleep(30)
+
                     os.system(cmd)
 
     elif mode == "local":

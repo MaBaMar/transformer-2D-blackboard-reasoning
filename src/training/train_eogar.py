@@ -1,4 +1,9 @@
-# minimal training script for EOgar model
+# ------------------------------------------------------------
+# train_eogar.py
+#
+# training script for EOgar-2D and EOgar-1D models
+# ------------------------------------------------------------
+
 import argparse
 import os
 import torch
@@ -11,11 +16,19 @@ import numpy as np
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, Subset, ConcatDataset
 from tqdm import tqdm
+from math import ceil
 
 from src.models.eogar import EOgar
-from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition
+from projectlib.my_datasets.blackboards import TokenizedBlackboardDataset, GenerationSpec, Split, BlackboardSpec, Addition, Subtraction, CarryOperation
 from projectlib.my_datasets.collators import collate_bb_state_state, make_collator_with_args
 from projectlib.trainutils import compute_accuracy_pt, compute_accuracy
+
+
+
+BB_OPERATION: dict[str, CarryOperation] = {
+    "add": Addition(),
+    "sub": Subtraction(),
+}
 
 
 MODELS_PATH = "./models/"
@@ -88,17 +101,22 @@ def train(
         errors_per_epoch: int,
         digits: int,
         batch_size: int,
-        bb_spec: BlackboardSpec,
+        bb_height: int,
+        bb_width: int,
+        bb_randomize_position: bool,
+        bb_operation: str,
         model_dimension: int,
         num_heads_encoder: int,
         n_encoder_blocks: int,
         rope_mode: str,
         learning_rate: float,
+        entropy_coef: float,
         epochs: int,
         seed: int,
         use_lr_scheduler: bool,
         warmup_steps: int,
         num_sched_cycles: float,
+        model_save_path_suffix: str,
         logging: str = "local",
     ):
 
@@ -114,71 +132,80 @@ def train(
             "learning_rate": learning_rate
         }
 
-    wandb.init(
-        name=name,
-        entity="blackboard-reasoning",
-        project="blackboard-reasoning",
-        config={
-            "model": model_name,
-            "train_size": train_size,
-            "test_size": test_size,
-            "eval_size": eval_size,
-            "error_correction": error_correction,
-            "error_pool_fraction": error_pool_fraction,
-            "errors_per_epoch": errors_per_epoch,
-            "digits": digits,
-            "batch_size": batch_size,
-            "bb_spec": {
-                "height": bb_spec.height,
-                "width": bb_spec.width,
-                "randomize_position": bb_spec.randomize_position,
-                "operation": bb_spec.operation,
-            },
-            "model_dimension": model_dimension,
-            "num_heads_encoder": num_heads_encoder,
-            "n_encoder_blocks": n_encoder_blocks,
-            "rope_mode": rope_mode,
-            "learning_rate": learning_rate,
-            "scheduler": {
-                **schedule_info
-            },
-            "epochs": epochs,
-            "seed": seed,
-        },
-        mode="online" if logging == "wandb" else "offline"
-    )
-
     torch.manual_seed(seed)
     np.random.seed(seed)
 
 
+    scale_factor = len(BB_OPERATION) if bb_operation == "mixed" else 1
     spec = GenerationSpec.digits(
         digits=digits,
-        eval_size=eval_size,
-        test_size=test_size,
-        train_size=train_size,
+        eval_size=ceil(eval_size / scale_factor),
+        test_size=ceil(test_size / scale_factor),
+        train_size=ceil(train_size / scale_factor),
     )
 
-    bb_full_dataset_train = TokenizedBlackboardDataset(
-        regenerate=True,
-        split=Split.TRAIN,
-        seed=seed,
-        generation_spec=spec,
-        blackboard_spec=bb_spec,
-    )
+    if bb_operation == "mixed":
+        ds_train, ds_test = [], []
+        for op in BB_OPERATION.values():
+            bb_spec = BlackboardSpec(
+                height=bb_height,
+                width=bb_width,
+                randomize_position=bb_randomize_position,
+                operation=op,
+            )
 
-    bb_dataset_test = TokenizedBlackboardDataset(
-        regenerate=True,
-        split=Split.TEST,
-        seed=seed,
-        generation_spec=spec,
-        blackboard_spec=bb_spec,
-    )
+            ds_train.append(
+                TokenizedBlackboardDataset(
+                    regenerate=True,
+                    split=Split.TRAIN,
+                    seed=seed,  # maybe we want to add +1 in each iteration here, to avoid the same samples for both operations
+                    generation_spec=spec,
+                    blackboard_spec=bb_spec,
+                )
+            )
+            ds_test.append(
+                TokenizedBlackboardDataset(
+                    regenerate=True,
+                    split=Split.TEST,
+                    seed=seed,
+                    generation_spec=spec,
+                    blackboard_spec=bb_spec,
+                )
+            )
+        bb_full_dataset_train = ConcatDataset(ds_train)
+        bb_dataset_test = ConcatDataset(ds_test)
 
-    pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
+        pad_id = ds_train[0].bb_2D_tokenizer.pad_id
+        vocab_size = ds_train[0].bb_2D_tokenizer.vocab_size
+
+    else:
+        bb_spec = BlackboardSpec(
+            height=bb_height,
+            width=bb_width,
+            randomize_position=bb_randomize_position,
+            operation=BB_OPERATION[bb_operation],
+        )
+
+        bb_full_dataset_train = TokenizedBlackboardDataset(
+            regenerate=True,
+            split=Split.TRAIN,
+            seed=seed,
+            generation_spec=spec,
+            blackboard_spec=bb_spec,
+        )
+
+        bb_dataset_test = TokenizedBlackboardDataset(
+            regenerate=True,
+            split=Split.TEST,
+            seed=seed,
+            generation_spec=spec,
+            blackboard_spec=bb_spec,
+        )
+
+        pad_id = bb_full_dataset_train.bb_2D_tokenizer.pad_id
+        vocab_size = bb_full_dataset_train.bb_2D_tokenizer.vocab_size
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    vocab_size = bb_full_dataset_train.bb_2D_tokenizer.vocab_size
 
     collate_fn = make_collator_with_args(collate_bb_state_state, pad_token_id=pad_id, device=device)
 
@@ -231,6 +258,7 @@ def train(
         n_encoder_blocks=n_encoder_blocks,
         pad_id=pad_id,
         rope_mode=rope_mode,
+        entropy_coef=entropy_coef,
     ).to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
@@ -241,6 +269,42 @@ def train(
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model initialized with {num_params} parameters.")
+
+    wandb.init(
+        name=name,
+        entity="blackboard-reasoning",
+        project="blackboard-reasoning",
+        config={
+            "model": model_name,
+            "train_size": train_size,
+            "test_size": test_size,
+            "eval_size": eval_size,
+            "error_correction": error_correction,
+            "error_pool_fraction": error_pool_fraction,
+            "errors_per_epoch": errors_per_epoch,
+            "digits": digits,
+            "batch_size": batch_size,
+            "bb_spec": {
+                "height": bb_height,
+                "width": bb_width,
+                "randomize_position": bb_randomize_position,
+                "operation": bb_operation,
+            },
+            "model_dimension": model_dimension,
+            "num_heads_encoder": num_heads_encoder,
+            "n_encoder_blocks": n_encoder_blocks,
+            "model_size": num_params,
+            "rope_mode": rope_mode,
+            "learning_rate": learning_rate,
+            "entropy_coef": entropy_coef,
+            "scheduler": {
+                **schedule_info
+            },
+            "epochs": epochs,
+            "seed": seed,
+        },
+        mode="online" if logging == "wandb" else "offline"
+    )
 
     for epoch in tqdm(range(epochs)):
 
@@ -269,12 +333,19 @@ def train(
             scheduler.step()
             current_lr = scheduler.get_last_lr()[0]
 
-            wandb.log({
+            # --- MONITORING UPDATE START ---
+            log_dict = {
                 "epoch": epoch,
                 "step": step,
                 "loss": loss.item(),
                 "lr": current_lr
-            })
+            }
+            # Check if model has the entropy loss attribute and log it if present
+            if getattr(model, "last_ent_loss", None) is not None:
+                log_dict["entropy_loss"] = model.last_ent_loss.item()
+
+            wandb.log(log_dict)
+            # --- MONITORING UPDATE END ---
 
             train_acc += compute_accuracy(logits, y_batch[0])
             train_acc_pt += compute_accuracy_pt(logits, y_batch[0])
@@ -323,23 +394,33 @@ def train(
     if not os.path.exists(MODELS_PATH):
         os.makedirs(MODELS_PATH)
 
-    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}.pt")
+    save_path = os.path.join(MODELS_PATH, f"{model_name}_d{digits}_s{seed}_r{'T' if bb_spec.randomize_position else 'F'}{model_save_path_suffix}.pt")
     torch.save({
         "model_state_dict": model.state_dict(),
         "config": {
-            "vocab_size": vocab_size,
-            "d_model": model_dimension,
+            "train_size": train_size,
+            "digits": digits,
+            "batch_size": batch_size,
+            "bb_spec": {
+                "height": bb_spec.height,
+                "width": bb_spec.width,
+                "randomize_position": bb_spec.randomize_position,
+                "operation": bb_operation,
+            },
+            "model_dimension": model_dimension,
             "num_heads_encoder": num_heads_encoder,
             "n_encoder_blocks": n_encoder_blocks,
-            "pad_id": pad_id,
             "rope_mode": rope_mode,
+            "learning_rate": learning_rate,
             "epochs": epochs,
             "train_size": train_size,
             "error_correction": error_correction,
             "error_pool_fraction": error_pool_fraction,
             "errors_per_epoch": errors_per_epoch,
-            "digits": digits,
             "seed": seed,
+            "entropy_coef": entropy_coef,
+            "vocab_size": vocab_size,
+            "pad_id": pad_id,
         }
     }, save_path)
 
@@ -348,13 +429,6 @@ def train(
 
 
 def main(args):
-    bb_spec = BlackboardSpec(
-        height=args.bb_height,
-        width=args.bb_width,
-        randomize_position=args.bb_randomize_position,
-        operation= Addition(),
-    )
-
     train(
         name=args.name,
         model_name=args.model_name,
@@ -366,18 +440,23 @@ def main(args):
         error_pool_fraction=args.error_pool_fraction,
         errors_per_epoch=args.errors_per_epoch,
         batch_size=args.batch_size,
-        bb_spec=bb_spec,
+        bb_height=args.bb_height,
+        bb_width=args.bb_width,
+        bb_randomize_position=args.bb_randomize_position,
+        bb_operation=args.operation,
         model_dimension=args.model_dimension,
         num_heads_encoder=args.num_heads_encoder,
         n_encoder_blocks=args.n_encoder_blocks,
         rope_mode=args.rope_mode,
         learning_rate=args.learning_rate,
+        entropy_coef=args.entropy_coef,
         epochs=args.epochs,
         seed=args.seed,
         logging=args.logging,
         use_lr_scheduler=args.use_lr_scheduler,
         warmup_steps=args.warmup_steps,
-        num_sched_cycles=args.num_sched_cycles
+        num_sched_cycles=args.num_sched_cycles,
+        model_save_path_suffix=args.model_save_path_suffix
     )
 
 
@@ -389,28 +468,31 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str)
     parser.add_argument("--model_name", type=str)
-    parser.add_argument("--digits", type=int)
-    parser.add_argument("--train_size", type=int)
-    parser.add_argument("--test_size", type=int)
-    parser.add_argument("--eval_size", type=int)
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--bb_height", type=int)
-    parser.add_argument("--bb_width", type=int)
-    parser.add_argument("--bb_randomize_position", action="store_true")
-    parser.add_argument("--model_dimension", type=int)
-    parser.add_argument("--num_heads_encoder", type=int)
-    parser.add_argument("--n_encoder_blocks", type=int)
-    parser.add_argument("--rope_mode", type=str)
-    parser.add_argument("--learning_rate", type=float)
-    parser.add_argument("--epochs", type=int)
-    parser.add_argument("--error_pool_fraction", type=float)
-    parser.add_argument("--errors_per_epoch", type=int)
+    parser.add_argument("--digits", type=int, required=True)
+    parser.add_argument("--train_size", type=int, required=True)
+    parser.add_argument("--test_size", type=int, required=True)
+    parser.add_argument("--eval_size", type=int, required=True)
+    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--bb_height", type=int, required=True)
+    parser.add_argument("--bb_width", type=int, required=True)
+    parser.add_argument("--bb_randomize_position", action="store_true", default=False)
+    parser.add_argument("--operation", type=str, required=True)
+    parser.add_argument("--model_dimension", type=int, required=True)
+    parser.add_argument("--num_heads_encoder", type=int, required=True)
+    parser.add_argument("--n_encoder_blocks", type=int, required=True)
+    parser.add_argument("--rope_mode", type=str, required=True)
+    parser.add_argument("--learning_rate", type=float, required=True)
+    parser.add_argument("--entropy_coef", type=float, default=0.0)
+    parser.add_argument("--epochs", type=int, required=True)
+    parser.add_argument("--error_pool_fraction", type=float, required=False)
+    parser.add_argument("--errors_per_epoch", type=int, required=False)
     parser.add_argument("--error_correction", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--logging", type=str, default="local")
     parser.add_argument("--use_lr_scheduler", action="store_true", default=False)
     parser.add_argument("--warmup_steps", type=int, default=10)         # number of warmup steps for the learning rate scheduler, only used if --use_lr_scheduler is True
     parser.add_argument("--num_sched_cycles", type=float, default=0.5)    # number of cycles for the learning rate scheduler, only used if --use_lr_scheduler is True
+    parser.add_argument("--model_save_path_suffix", type=str, default="")
 
     args = parser.parse_args()
     main(args)

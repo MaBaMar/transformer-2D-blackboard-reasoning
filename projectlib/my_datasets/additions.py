@@ -20,11 +20,11 @@ class AdditionDataset(GeneratedDataset):
     Dataset containing prompts for basic operations (addition/subtraction).
 
     Parameters:
+        generation_spec (GenerationSpec, optional): Controls size and numeric range. Defaults to BASE_SPEC.
         path (str, optional): Path to store/load the dataset. Defaults to train or eval path.
         tokenizer (AutoTokenizer, optional): Tokenizer for encoding examples. Defaults to None.
-        train (bool, optional): Generate training set if True, else evaluation. Defaults to True.
+        seed (int, optional): Fixes the seed. Defaults to None.
         regenerate (bool, optional): Regenerate dataset if True, even if already present. Defaults to False.
-        generation_spec (GenerationSpec, optional): Controls size and numeric range. Defaults to BASE_SPEC.
         operand (Operation, optional): Arithmetic operation ("+" or "-"). Defaults to "+".
         spaces (bool, optional): Use spaces between digits if True. Defaults to False.
 

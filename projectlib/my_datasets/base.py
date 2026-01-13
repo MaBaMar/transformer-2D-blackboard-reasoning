@@ -19,6 +19,10 @@ DATASETS_BASE_DIR = "datasets/"
 TOKENIZER_MAX_LENGTH = 20
 RANDOM_SEED = 0
 
+MIN_DIGITS = 4
+
+OVERSAMPLING_FACTOR = 1.5
+
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 PaddingMode: TypeAlias = Literal["longest", "max_length", "do_not_pad"]
 
@@ -65,6 +69,27 @@ class GenerationSpec:
 
 
 class GeneratedDataset(Dataset, ABC):
+    """
+    Base class for the custom generated datasets.
+
+    Parameters:
+        path (str): Path to store/load the dataset.
+        generation_spec (GenerationSpec): Controls size and numeric range.
+        tokenizer (AutoTokenizer, optional): Tokenizer for encoding examples. Defaults to None.
+        regenerate (bool, optional): Regenerate dataset if True, even if already present. Defaults to False.
+        max_length (int, optional): Max length of inputs for the tokneizer. Defaults to TOKENIZER_MAX_LENGTH.
+        split (Split, optional): Specifies the dataset split (EVAL, TRAIN, TEST). Defaults to EVAL.
+        seed (int, optional): Fixes the seed. Defaults to None.
+        disallow_op_permutations (bool, optional): If True then the first operand must be larger than the second one. Defaults to False.
+        tokenizer_padding_mode (PaddingMode, optional): Padding mode of the tokenizer. Defaults to do_not_pad.
+
+    Returns:
+        A `GeneratedDataset` object containing lists of inputs and labels.
+
+    Note:
+        Subclasses have to implement the __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL) function.
+    
+    """
     def __init__(
         self,
         path: str,
@@ -159,6 +184,53 @@ class GeneratedDataset(Dataset, ABC):
 
         Warning: Sampling both (x, y) and (y, x) is allowed for x != y unless disallow_permutations is True.
         """
+        max_digits = int(math.log10(spec.high))
+        min_digits = max(MIN_DIGITS, int(math.log10(spec.low)))
+        num_blocks = max_digits - min_digits + 1
+
+        assert max_digits >= min_digits, f"Choose a minimum of {MIN_DIGITS} digits!, got: max_digits={max_digits}, min_digits={min_digits}, hi = {spec.high}, lo={spec.low}"
+
+        values: list[tuple[int, int]] = []
+        xs, ys = [], []
+
+        for d in range(min_digits, max_digits + 1):
+            blocksize = lambda size: int((size // num_blocks + 1) * OVERSAMPLING_FACTOR)
+
+            d_spec = GenerationSpec(
+                low=10**(d-1),
+                high=10**d,
+                eval_size=blocksize(spec.eval_size),
+                train_size=blocksize(spec.train_size),
+                test_size=blocksize(spec.test_size),
+            )
+
+            vs = GeneratedDataset._sample_for_digits(d_spec, disallow_permutations)
+
+            xs += [x for x, _ in vs]
+            ys += [y for _, y in vs]
+
+        random.shuffle(xs)
+        random.shuffle(ys)
+
+        values = list(zip(xs, ys))
+
+        if disallow_permutations:
+            for i in range(len(values)):
+                x, y = values[i]
+                if x < y:
+                    values[i] = y, x
+
+        values = list(set(values))
+
+        size = spec.eval_size + spec.train_size + spec.test_size
+        assert len(values) >= size, "Too many duplicates, deduplicated list of values is too short, increase the number of digits or the oversampling factor."
+
+        values = values[:size]
+
+        return values
+
+    @staticmethod
+    def _sample_for_digits(spec: GenerationSpec, disallow_permutations: bool) -> list[tuple[int, int]]:
         span = spec.high - spec.low # hi is exclusive
 
         if disallow_permutations:

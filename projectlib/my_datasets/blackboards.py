@@ -27,7 +27,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from projectlib.my_datasets._blackboard_operands import Addition, CarryOperation
+from projectlib.my_datasets._blackboard_operands import Addition, CarryOperation, Subtraction
 from projectlib.my_datasets.base import GeneratedDataset, GenerationSpec, Split
 
 @dataclass

@@ -317,7 +317,7 @@ class GPTStyleBaseline(nn.Module):
         }, model_path)
 
     @staticmethod
-    def load_from_path(model_path: str) -> GPTStyleBaseline:
+    def load_from_path(model_path: str) -> "GPTStyleBaseline":
         """Load a locally stored model at the given path.
 
         Args:
