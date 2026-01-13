@@ -188,7 +188,7 @@ class GeneratedDataset(Dataset, ABC):
         min_digits = max(MIN_DIGITS, int(math.log10(spec.low)))
         num_blocks = max_digits - min_digits + 1
 
-        assert max_digits >= min_digits, "Choose a minimum of 4 digits!"
+        assert max_digits >= min_digits, f"Choose a minimum of {MIN_DIGITS} digits!, got: max_digits={max_digits}, min_digits={min_digits}, hi = {spec.high}, lo={spec.low}"
 
         values: list[tuple[int, int]] = []
         xs, ys = [], []
