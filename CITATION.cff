@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+
+authors:
+  - family-names: Baumann
+    given-names: Marco
+  - family-names: Bongni
+    given-names: Sascha
+  - family-names: Hofstetter
+    given-names: Lino
+  - family-names: Zimmermann
+    given-names: Patrick
+
+title: "Transformer-2D-Blackboard-Reasoning"
+version: 1.0.1
+date-released: 2026-01-16
+
+url: "https://github.com/MaBaMar/transformer-2D-blackboard-reasoning"
+repository-code: "https://github.com/MaBaMar/transformer-2D-blackboard-reasoning"
+license: "MIT"
