@@ -6,14 +6,9 @@
 # Purpose: Full model implementation based on 2D rope and autoregressive reasoning step
 # generation for additions and subtractions
 #
-# Name: Toy name, feel free to change it to sth fancy
-#
 # ADDITION (entropy regularization):
-#   - EOgar.forward still returns (logits, loss) so your training loop is unchanged.
 #   - If entropy_coef > 0, we add: loss_total = loss_CE + entropy_coef * loss_entropy
 #   - loss_entropy is aggregated from ent_loss returned by TwoDTPERoPEAttention in each block.
-#   - For logging without changing the training loop, we expose:
-#       self.last_ent_loss  (None if not computed)
 # ------------------------------------------------------------
 
 import json

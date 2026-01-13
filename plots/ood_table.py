@@ -63,7 +63,7 @@ def group_data(file_name):
 
     # Calculate standard error for each group
     acc_mean = grouped_data["accuracy"].mean().rename(columns={"accuracy": "acc_mean"})
-    acc_stddev = grouped_data["accuracy"].sem().rename(columns={"accuracy": "acc_stddev"})
+    acc_stddev = grouped_data["accuracy"].std().rename(columns={"accuracy": "acc_stddev"})
 
     merged = pd.merge(acc_mean, acc_stddev, on=["model", "digits", "operation"])
 
@@ -83,7 +83,7 @@ def plot_performance(df):
     lines = []
 
     lines.append(r"\begin{table}[t]")
-    lines.append(r"\caption{Mean accuracy and variation of the different architectures over addition, subtraction and mixed datasets. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}")
+    lines.append(r"\caption{Mean accuracy and standard deviation of the different architectures over addition, subtraction and mixed datasets. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}")
     lines.append(r"\label{table:ood}")
     lines.append(r"\vskip 0.15in")
     lines.append(r"\begin{center}")
@@ -123,7 +123,7 @@ def plot_performance(df):
                 if len(m) == 1:
                     mean = m["acc_mean"].values[0] * 100
                     std = m["acc_stddev"].values[0] * 100
-                    cell = rf"\scriptsize{{{mean:.1f}$\sigma${std:.1f}}}"
+                    cell = rf"\scriptsize{{{mean:.1f}$\pm${std:.1f}}}"
                 else:
                     cell = r"\scriptsize{--}"
 

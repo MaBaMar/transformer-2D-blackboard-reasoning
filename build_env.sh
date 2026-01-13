@@ -8,4 +8,4 @@ pip install wandb
 pip install tqdm
 pip install transformers
 pip install pandas
-pip install matplotlib
+pip install -e ./projectlib

@@ -69,6 +69,27 @@ class GenerationSpec:
 
 
 class GeneratedDataset(Dataset, ABC):
+    """
+    Base class for the custom generated datasets.
+
+    Parameters:
+        path (str): Path to store/load the dataset.
+        generation_spec (GenerationSpec): Controls size and numeric range.
+        tokenizer (AutoTokenizer, optional): Tokenizer for encoding examples. Defaults to None.
+        regenerate (bool, optional): Regenerate dataset if True, even if already present. Defaults to False.
+        max_length (int, optional): Max length of inputs for the tokneizer. Defaults to TOKENIZER_MAX_LENGTH.
+        split (Split, optional): Specifies the dataset split (EVAL, TRAIN, TEST). Defaults to EVAL.
+        seed (int, optional): Fixes the seed. Defaults to None.
+        disallow_op_permutations (bool, optional): If True then the first operand must be larger than the second one. Defaults to False.
+        tokenizer_padding_mode (PaddingMode, optional): Padding mode of the tokenizer. Defaults to do_not_pad.
+
+    Returns:
+        A `GeneratedDataset` object containing lists of inputs and labels.
+
+    Note:
+        Subclasses have to implement the __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL) function.
+    
+    """
     def __init__(
         self,
         path: str,

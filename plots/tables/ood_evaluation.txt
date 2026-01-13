@@ -1,5 +1,5 @@
 \begin{table}[t]
-\caption{Mean accuracy and variation of the different architectures over addition, subtraction and mixed datasets. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}
+\caption{Mean accuracy and standard deviation of the different architectures over addition, subtraction and mixed datasets. The mean and standard deviation are multiplied by 100 to express values as percentages. All reported values are rounded to one decimal place.}
 \label{table:ood}
 \vskip 0.15in
 \begin{center}
@@ -9,21 +9,21 @@
 \toprule
 \textbf{EOgar-2d} & 10 & 11 & 12 & 13 \\
 \midrule
-Add & \scriptsize{98.9$\sigma$0.5} & \scriptsize{88.7$\sigma$6.3} & \scriptsize{59.2$\sigma$10.3} & \scriptsize{36.2$\sigma$12.0} \\
-Sub & \scriptsize{99.0$\sigma$0.4} & \scriptsize{73.1$\sigma$9.8} & \scriptsize{44.8$\sigma$11.4} & \scriptsize{26.1$\sigma$9.4} \\
-Mixed & \scriptsize{73.9$\sigma$11.9} & \scriptsize{63.8$\sigma$10.8} & \scriptsize{36.1$\sigma$7.7} & \scriptsize{15.7$\sigma$4.5} \\
+Add & \scriptsize{98.9$\pm$1.6} & \scriptsize{88.7$\pm$20.0} & \scriptsize{59.2$\pm$32.7} & \scriptsize{36.2$\pm$38.0} \\
+Sub & \scriptsize{99.0$\pm$1.3} & \scriptsize{73.1$\pm$31.0} & \scriptsize{44.8$\pm$36.1} & \scriptsize{26.1$\pm$29.7} \\
+Mixed & \scriptsize{73.9$\pm$37.5} & \scriptsize{63.8$\pm$34.1} & \scriptsize{36.1$\pm$24.2} & \scriptsize{15.7$\pm$14.4} \\
 \midrule
 \multicolumn{5}{l}{\textbf{EOgar-1d}} \\
 \midrule
-Add & \scriptsize{96.9$\sigma$1.8} & \scriptsize{59.0$\sigma$10.4} & \scriptsize{38.0$\sigma$12.9} & \scriptsize{18.8$\sigma$9.1} \\
-Sub & \scriptsize{98.5$\sigma$0.9} & \scriptsize{70.5$\sigma$9.4} & \scriptsize{40.1$\sigma$12.5} & \scriptsize{25.0$\sigma$10.7} \\
-Mixed & \scriptsize{66.6$\sigma$12.3} & \scriptsize{54.7$\sigma$13.4} & \scriptsize{30.4$\sigma$10.7} & \scriptsize{8.8$\sigma$3.3} \\
+Add & \scriptsize{96.9$\pm$5.7} & \scriptsize{59.0$\pm$32.8} & \scriptsize{38.0$\pm$40.7} & \scriptsize{18.8$\pm$28.7} \\
+Sub & \scriptsize{98.5$\pm$3.0} & \scriptsize{70.5$\pm$29.7} & \scriptsize{40.1$\pm$39.5} & \scriptsize{25.0$\pm$33.8} \\
+Mixed & \scriptsize{66.6$\pm$39.1} & \scriptsize{54.7$\pm$42.3} & \scriptsize{30.4$\pm$34.0} & \scriptsize{8.8$\pm$10.5} \\
 \midrule
 \multicolumn{5}{l}{\textbf{CoT}} \\
 \midrule
-Add & \scriptsize{87.2$\sigma$2.7} & \scriptsize{18.5$\sigma$2.1} & \scriptsize{0.0$\sigma$0.0} & \scriptsize{0.0$\sigma$0.0} \\
-Sub & \scriptsize{60.2$\sigma$6.4} & \scriptsize{10.4$\sigma$2.3} & \scriptsize{0.1$\sigma$0.1} & \scriptsize{0.0$\sigma$0.0} \\
-Mixed & \scriptsize{39.6$\sigma$5.5} & \scriptsize{7.4$\sigma$1.6} & \scriptsize{0.0$\sigma$0.0} & \scriptsize{0.0$\sigma$0.0} \\
+Add & \scriptsize{87.2$\pm$8.6} & \scriptsize{18.5$\pm$6.7} & \scriptsize{0.0$\pm$0.0} & \scriptsize{0.0$\pm$0.0} \\
+Sub & \scriptsize{60.2$\pm$20.2} & \scriptsize{10.4$\pm$7.3} & \scriptsize{0.1$\pm$0.3} & \scriptsize{0.0$\pm$0.0} \\
+Mixed & \scriptsize{39.6$\pm$17.5} & \scriptsize{7.4$\pm$5.1} & \scriptsize{0.0$\pm$0.0} & \scriptsize{0.0$\pm$0.0} \\
 \bottomrule
 \end{tabular}
 \end{sc}

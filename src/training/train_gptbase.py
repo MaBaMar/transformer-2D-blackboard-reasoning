@@ -2,7 +2,6 @@
 # train_gptbase.py
 #
 # training script for GPT-Base model
-# I tried to keep it similar to train_eogar.py, but added lr scheduling
 # ------------------------------------------------------------
 
 from argparse import ArgumentParser

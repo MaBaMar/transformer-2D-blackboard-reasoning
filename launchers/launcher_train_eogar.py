@@ -5,7 +5,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "OoD_Train_EOgar"
+NAME = "OoD_Train_EOgar_Debug"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
@@ -23,9 +23,7 @@ applicable_configs = {
     "test_sizes": [1024],
     "batch_size": [64],
     "model_spec": [
-        # { "model_name": "EOgar-d64-h4-b8", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
         { "model_name": "EOgar", "model_dimension": 64, "num_heads_encoder": 4, "n_encoder_blocks": 4 },
-        # { "model_name": "EOgar-d32-h4-b8", "model_dimension": 32, "num_heads_encoder": 4, "n_encoder_blocks": 8 },
     ],
     "bb_specs": [
         { "height": 6, "width": 20, "randomize_position": True, "operation": "add" },

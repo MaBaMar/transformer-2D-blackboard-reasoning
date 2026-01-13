@@ -1,3 +1,17 @@
+# ------------------------------------------------------------
+# run_evaluations.py
+#
+# Run the evaluation pipeline for the different models that are supported.
+#
+# Supported models:
+#       - scratchpad
+#       - cot
+#       - blackboard-1d
+#       - blackboard-2d
+#
+# Run using the corresponding launcher script
+# ------------------------------------------------------------
+
 import argparse
 import torch
 import wandb

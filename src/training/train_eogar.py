@@ -1,4 +1,9 @@
-# minimal training script for EOgar model
+# ------------------------------------------------------------
+# train_eogar.py
+#
+# training script for EOgar-2D and EOgar-1D models
+# ------------------------------------------------------------
+
 import argparse
 import os
 import torch

@@ -1,3 +1,24 @@
+# ------------------------------------------------------------
+# utils.py
+#
+# Utility functions that generate run commands for the cluster and local deployement.
+#
+# This file is adapted from:
+#   Project: Test-Time Training on Nearest Neighbors (TTT-NN)
+#   Original authors: Jonas Hübotter, Sascha Bongni, Ido Hakimi
+#   Source: https://github.com/lasgroup/tttlm
+#
+# Modifications by: Sascha Bongni
+# Changes:
+#   - Added support for the DINFK student cluster
+#   - Adapted the flags for running on Euler
+#
+# This file is based on code from a previous project completed in 2024.
+# I was a contributor to the original project.
+#
+# Original license: MIT License
+# ------------------------------------------------------------
+
 import getpass
 import glob
 import json

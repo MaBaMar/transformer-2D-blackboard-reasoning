@@ -21,15 +21,17 @@ class CoTDataset(GeneratedDataset):
     Dataset containing prompts that induce a chain of thought approach that is similar to scratchpads.
 
     Parameters:
+        generation_spec (GenerationSpec): Controls size and numeric range.
         path (str, optional): Path to store/load the dataset. Defaults to train or eval path.
         tokenizer (AutoTokenizer, optional): Tokenizer for encoding examples. Defaults to None.
-        train (bool, optional): Generate training set if True, else evaluation. Defaults to True.
+        split (Split, optional): Specifies the dataset split (EVAL, TRAIN, TEST). Defaults to EVAL.
+        seed (int, optional): Fixes the seed. Defaults to None.
         regenerate (bool, optional): Regenerate dataset if True, even if already present. Defaults to False.
-        generation_spec (GenerationSpec, optional): Controls size and numeric range. Defaults to BASE_SPEC.
         operand (Operation, optional): Arithmetic operation ("+" or "-"). Defaults to "+".
+        tokenizer_padding_mode (PaddingMode, optional): Padding mode of the tokenizer. Defaults to do_not_pad.
 
     Returns:
-        A `ScratchpadDataset` object containing lists of inputs and labels.
+        A `CoTDataset` object containing lists of inputs and labels.
 
     Example:
         The entries are of the following form
@@ -37,23 +39,15 @@ class CoTDataset(GeneratedDataset):
         {
             'input': '1 7 + 8 3',
 
-            'label': 'Input: 1 7 + 8 3
-
-                      Target:
-
-                      &lt;scratch&gt;
-
-                      1 7 + 8 3 , C: 0
-
-                      1 + 8 , 0 C: 1 # added 7 + 3 = 0 carry 1
-
-                      , 0 0 C: 1 # added 1 + 8 + 1 = 0 carry 1
-
+            'label': 'Input: 1 7 + 8 3 <sep>
+                      Computation:
+                      7 + 3 , carry: 0
+                      1 + 8 + 1 , 0 carry: 1
+                      , 0 0 carry: 1
                       1 0 0
 
-                      &lt;/scratch&gt;
-
-                      Result: 1 0 0'
+                      Result: 1 0 0
+                      <eos>'
         }
     """
     def __init__(
