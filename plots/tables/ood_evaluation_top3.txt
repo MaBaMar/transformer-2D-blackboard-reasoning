@@ -9,9 +9,9 @@
 \toprule
 \textbf{Model} & 10 & 11 & 12 & 13 \\
 \midrule
-EOgar-2d & \scriptsize{99.9$\pm$0.1} & \scriptsize{99.3$\pm$0.7} & \scriptsize{87.5$\pm$10.3} & \scriptsize{66.7$\pm$29.8} \\
-EOgar-1d & \scriptsize{99.8$\pm$0.2} & \scriptsize{87.7$\pm$14.3} & \scriptsize{71.5$\pm$29.0} & \scriptsize{37.5$\pm$31.3} \\
-CoT & \scriptsize{94.7$\pm$2.0} & \scriptsize{23.2$\pm$0.9} & \scriptsize{0.0$\pm$0.0} & \scriptsize{0.0$\pm$0.0} \\
+EOgar-2d & \scriptsize{100.0$\pm$0.0} & \scriptsize{99.7$\pm$0.2} & \scriptsize{93.3$\pm$3.7} & \scriptsize{83.3$\pm$7.2} \\
+EOgar-1d & \scriptsize{99.9$\pm$0.2} & \scriptsize{96.1$\pm$4.9} & \scriptsize{86.9$\pm$8.2} & \scriptsize{55.9$\pm$24.4} \\
+CoT & \scriptsize{96.2$\pm$0.4} & \scriptsize{23.8$\pm$0.6} & \scriptsize{0.0$\pm$0.0} & \scriptsize{0.0$\pm$0.0} \\
 \bottomrule
 \end{tabular}
 \end{sc}

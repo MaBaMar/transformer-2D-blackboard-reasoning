@@ -17,6 +17,10 @@ DATA_FILE = "./plots/data/{file_name:s}.csv"
 
 
 
+TOP = 5
+
+
+
 #
 #   Get the data
 #
@@ -71,19 +75,19 @@ def group_data(file_name):
 
 
 
-def group_data_top5(file_name):
+def group_data_top(file_name):
     data = pd.read_csv(DATA_FILE.format(file_name=file_name))
 
     group_cols = ["model", "digits", "operation"]
-    top5 = (
+    top = (
         data.sort_values("accuracy", ascending=False)
             .groupby(group_cols, as_index=False)
-            .head(5)
+            .head(TOP)
     )
-    grouped_data = top5.groupby(group_cols, as_index=False)
+    grouped_data = top.groupby(group_cols, as_index=False)
 
     # Check that the same seeds are used in the entire row
-    seed_counts = top5[top5["operation"] == "add"].groupby("model")["seed"].nunique()
+    seed_counts = top[top["operation"] == "add"].groupby("model")["seed"].nunique()
     print(seed_counts)
 
     # Calculate standard error for each group
@@ -180,7 +184,7 @@ def plot_performance(df):
 
 
 
-def plot_performance_top5(df):
+def plot_performance_top(df):
     digits = sorted(df["digits"].unique())
     models = ["EOgar-2d", "EOgar-1d", "CoT"]
 
@@ -192,7 +196,7 @@ def plot_performance_top5(df):
         r"The mean and standard deviation are multiplied by 100 to express values as percentages. "
         r"All reported values are rounded to one decimal place.}"
     )
-    lines.append(r"\label{table:ood_top5}")
+    lines.append(r"\label{table:ood_top}")
     lines.append(r"\vskip 0.15in")
     lines.append(r"\begin{center}")
     lines.append(r"\small")
@@ -239,7 +243,7 @@ def plot_performance_top5(df):
     if not os.path.exists(TBL_PATH):
         os.makedirs(TBL_PATH)
 
-    with open(TBL_PATH + "ood_evaluation_top5.txt", "w") as f:
+    with open(TBL_PATH + f"ood_evaluation_top{TOP}.txt", "w") as f:
         f.write(latex_table)
 
 
@@ -253,9 +257,9 @@ def main(args):
     data = group_data(args.tag)
     plot_performance(data)
 
-    # Group and plot only the top 5 runs
-    data = group_data_top5(args.tag)
-    plot_performance_top5(data)
+    # Group and plot only the top runs
+    data = group_data_top(args.tag)
+    plot_performance_top(data)
 
 
 
