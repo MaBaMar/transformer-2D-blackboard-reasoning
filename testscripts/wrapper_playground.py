@@ -33,7 +33,7 @@ def check(train = False):
         high = 10**12
     )
 
-    bb_spec = BlackboardSpec(5, 20, False, Addition())
+    bb_spec = BlackboardSpec(6, 20, False, Addition())
 
     bb_dataset = TokenizedBlackboardDataset(regenerate=False, generation_spec=spec, blackboard_spec=bb_spec, split=Split.TRAIN)
     # exit(-1)
@@ -64,7 +64,7 @@ def check(train = False):
     print("Model initialized")
 
     if(train):
-        epochs = 5
+        epochs = 10
         optimizer = AdamW(model.parameters(), lr=1e-3)
         total_steps = len(data_loader_train) * epochs
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=0)
@@ -95,7 +95,7 @@ def check(train = False):
                     "loss": f"{loss.item():.4f}",
                     "lr": f"{current_lr:.6f}"
                 })
-            if epoch % 5 == 0:
+            if (epoch+1) % 5 == 0:
                 torch.save(model.state_dict(), f"model_epoch_{epoch}.pth")
                 acc = 0
                 reasoner = BBChainReasoner(model, torch.device(device), bb_spec, timeout_iters=15)
@@ -148,16 +148,9 @@ def check(train = False):
     st = reasoner.compute_from_operands(909, 256)
     st.show_steps()
 
-    for i, [x, _] in enumerate(data_loader):
-        chainlist = reasoner.compute_from_databatch(x)
-        print(chainlist_to_results(chainlist))
-
-        for chain in chainlist:
-            chain.show_steps()
-
 if __name__ == "__main__":
 
     logging.basicConfig()
-    logging.getLogger().setLevel(logging.DEBUG)
+    # logging.getLogger().setLevel(logging.DEBUG)
 
     check(True)

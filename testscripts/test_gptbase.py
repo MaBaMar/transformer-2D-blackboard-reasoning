@@ -3,6 +3,8 @@
 #
 # visual tests to develop and build the GPT baseline model
 #
+# WARNING: Requires a pretrained model located at the specified path
+#
 # Run with:
 #  - python -m testscripts.run_gptbase
 #  - run from the project root
