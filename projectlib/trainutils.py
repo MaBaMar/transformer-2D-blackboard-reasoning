@@ -1,7 +1,10 @@
-"""
-Training auxiliaries for the research project. Feel free to define new functions here and to use them in the code.
-Please regularly push updated versions of the library, so others can use the same functionality.
-"""
+# ------------------------------------------------------------
+# trainutils.py
+#
+# Mainly utility functions to measure state-transition accuracy
+# during training. Extensively used in our logging runs on weights
+# and biases
+# ------------------------------------------------------------
 
 import torch
 import warnings

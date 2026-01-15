@@ -1,3 +1,10 @@
+# ------------------------------------------------------------
+# _operands.py
+#
+# Operand types and registries for the base dataset and scratchpad
+#
+# ------------------------------------------------------------
+
 
 from typing import Callable, Dict, Literal
 

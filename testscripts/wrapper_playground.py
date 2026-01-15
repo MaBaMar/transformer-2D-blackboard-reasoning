@@ -2,7 +2,10 @@
 # wrapper_playground.py
 #
 # Convenient script to play around and test the blackboard reasoning model.
-# (Marco) I might later replace this with a test suite, but for now, I do not have the time to write one.
+#
+# Run with:
+#  - python -m testscripts.wrapper_playground
+#  - run from the project root
 # ------------------------------------------------------------
 import torch
 import logging

@@ -1,3 +1,11 @@
+# ------------------------------------------------------------
+# cot.py
+#
+# Contains the dataset of the modified scratchpad implementation
+# with reduced compute for our experiments.
+# ------------------------------------------------------------
+
+
 import torch
 
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast

@@ -1,3 +1,10 @@
+# ------------------------------------------------------------
+# randomization_expermiment.py
+#
+# used to generate latex_table for the paper in a convenient manner
+# ------------------------------------------------------------
+
+
 import argparse
 import os
 

@@ -1,3 +1,10 @@
+# ------------------------------------------------------------
+# ood_table.py
+#
+# used to generate latex_table for the paper in a convenient manner
+# ------------------------------------------------------------
+
+
 import argparse
 import os
 
@@ -29,7 +36,7 @@ def wandb_get_data(tag: str):
     print(f"Trying to load data with tag \"{tag}\"")
     api = wb.Api()
     runs = api.runs(
-        path="blackboard-reasoning/blackboard-reasoning", 
+        path="blackboard-reasoning/blackboard-reasoning",
         filters={"tags": {"$in": [tag]}}
     )
 

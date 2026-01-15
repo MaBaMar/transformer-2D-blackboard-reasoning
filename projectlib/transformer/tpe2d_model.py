@@ -6,7 +6,6 @@
 #
 # Focus:
 #   - Implement 2D-TPE logic in PyTorch, without LLaMA/HF deps.
-#   - Simple toy dataset so the file runs end-to-end.
 #
 # Assumptions about input:
 #   - We get:
@@ -20,8 +19,6 @@
 #
 # ------------------------------------------------------------
 
-# NOTE: Entropy regularization is implemented (enable via entropy_coef).
-# NOTE: Data generation is basic. Paper used Question/Table/Answer formatting and flattens it, which is not implemented here. (but easy to add)
 
 import math
 from typing import Tuple, Optional, final
@@ -84,7 +81,6 @@ class RoPECache(nn.Module):
 
         # positions 0, 1, ..., max_position-1
         t = torch.arange(max_position, device=device, dtype=self.inv_freq.dtype)  # [max_position]
-        # couldn't get rid of type problems here
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # [max_position, head_dim/2]
         emb = torch.repeat_interleave(freqs, 2, dim=-1)  # [max_position, head_dim]
 
@@ -136,7 +132,6 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
     x2 = x[..., d // 2 :]      # "imag" part
     return torch.cat((-x2, x1), dim=-1)
 
-    NOTE: I am not sure yet which is more efficient in practice. -> Something we need to check
     """
     x1 = x[..., ::2]
     x2 = x[..., 1::2]
@@ -495,183 +490,3 @@ class OutputHead(nn.Module):
                 )
 
             return logits, loss
-
-
-# -------------------------------------------------------------------
-# TODO: Maybe we can remove everything after this line and move it to
-# TODO: the actual model implementations as it is no longer universal
-# -------------------------------------------------------------------
-
-# -------------------------------------------------------------------
-# Transformer block
-# -------------------------------------------------------------------
-
-class TransformerBlock2DTPE(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        num_heads: int,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.ln1 = nn.LayerNorm(d_model)
-
-        self.attn = TwoDTPERoPEAttention(
-            d_model=d_model,
-            num_heads=num_heads,
-            dropout=dropout,
-        )
-
-        self.ln2 = nn.LayerNorm(d_model)
-        self.ffn = FeedForward(d_model=d_model, hidden_dim=4 * d_model, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        pos_row: torch.Tensor,
-        pos_col: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        # pre-norm + attention
-        h = self.ln1(x)
-        h_attn, ent_loss = self.attn(
-            h,
-            pos_row=pos_row,
-            pos_col=pos_col,
-            key_padding_mask=key_padding_mask,
-        )
-        x = x + self.dropout(h_attn)
-
-        # pre-norm + FFN
-        h2 = self.ln2(x)
-        h2 = self.ffn(h2)
-        x = x + self.dropout(h2)
-        return x, ent_loss
-
-
-# -------------------------------------------------------------------
-# Causal Transformer with 2D-TPE attention
-# -------------------------------------------------------------------
-
-class CausalTransformer2DTPE(nn.Module):
-    def __init__(
-        self,
-        vocab_size: int,
-        d_model: int = 256,
-        num_layers: int = 4,
-        num_heads: int = 4,
-        dropout: float = 0.1,
-        entropy_coef: float = 0.0,
-    ) -> None:
-        super().__init__()
-        self.d_model = d_model
-        self.entropy_coef = entropy_coef
-
-        self.tok_emb = nn.Embedding(vocab_size, d_model)
-        self.drop = nn.Dropout(dropout)
-
-        self.layers = nn.ModuleList([
-            TransformerBlock2DTPE(d_model=d_model, num_heads=num_heads, dropout=dropout)
-            for _ in range(num_layers)
-        ])
-
-        self.ln_f = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        pos_row: torch.Tensor,
-        pos_col: torch.Tensor,
-        key_padding_mask: Optional[torch.Tensor] = None,
-        targets: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
-        """
-        input_ids: [B,L]
-        pos_row, pos_col: [B,L]
-        key_padding_mask: [B,L] (True where padded)
-        targets: [B,L] or None
-        """
-
-        x = self.tok_emb(input_ids)  # * math.sqrt(self.d_model) not used in RoPE, comes from original Transformer paper
-        x = self.drop(x)
-
-        ent_losses = []
-
-        for layer in self.layers:
-            x, ent_l = layer(
-                x,
-                pos_row=pos_row,
-                pos_col=pos_col,
-                key_padding_mask=key_padding_mask,
-            )
-            if (targets is not None) and (self.entropy_coef > 0.0) and (ent_l is not None):
-                ent_losses.append(ent_l)
-
-        x = self.ln_f(x)
-        logits = self.head(x)  # [B,L,vocab]
-
-        loss: Optional[torch.Tensor] = None
-        ent_loss_total: Optional[torch.Tensor] = None
-        if targets is not None:
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                targets.view(-1),
-                ignore_index=-100,
-            )
-
-            if self.entropy_coef > 0.0 and len(ent_losses) > 0:
-                # average across layers to keep scale stable as you change depth
-                ent_loss_total = torch.stack(ent_losses).mean()
-                loss = loss + self.entropy_coef * ent_loss_total
-
-        return logits, loss, ent_loss_total
-
-    @torch.no_grad()
-    def generate(
-        self,
-        input_ids: torch.Tensor,
-        pos_row: torch.Tensor,
-        pos_col: torch.Tensor,
-        max_new_tokens: int,
-        eos_id: Optional[int] = None,
-        pad_id: Optional[int] = None,
-    ) -> torch.Tensor:
-        """
-        Very simple greedy generation just to show end-to-end.
-        We assume pos_row/pos_col for new tokens are continued
-        monotonically from the last token.
-        """
-        self.eval()
-        device = input_ids.device
-        B, L = input_ids.shape
-        out_ids = input_ids.clone()
-        row = pos_row.clone()
-        col = pos_col.clone()
-
-        if pad_id is None:
-            pad_id = 0
-
-        for _ in range(max_new_tokens):
-            key_padding_mask = (out_ids == pad_id)
-            logits, _, _ = self.forward(
-                out_ids,
-                pos_row=row,
-                pos_col=col,
-                key_padding_mask=key_padding_mask,
-                targets=None,
-            )
-            next_token = logits[:, -1].argmax(dim=-1)  # [B]
-            out_ids = torch.cat([out_ids, next_token.unsqueeze(-1)], dim=-1)
-
-            # simple continuation of orders: just +1 from last
-            last_row = row[:, -1]
-            last_col = col[:, -1]
-            row = torch.cat([row, (last_row + 1).unsqueeze(-1)], dim=-1)
-            col = torch.cat([col, (last_col + 1).unsqueeze(-1)], dim=-1)
-
-            if eos_id is not None and bool((next_token == eos_id).all()):
-                break
-
-        return out_ids

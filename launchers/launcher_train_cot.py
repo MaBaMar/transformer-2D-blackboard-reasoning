@@ -1,3 +1,12 @@
+# ------------------------------------------------------------
+# launcher_train_cot.py
+#
+# Configurable runner for training GPT type models. Extensively
+# used for the OOD experiment described in the paper
+#
+# See README for directions on usage
+# ------------------------------------------------------------
+
 import argparse
 
 from src.training import train_gptbase as experiment

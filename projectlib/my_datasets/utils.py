@@ -1,3 +1,9 @@
+# ------------------------------------------------------------
+# utils.py
+#
+# general dataset utilities, mainly used in the scratchpad dataset
+# ------------------------------------------------------------
+
 def get_digits(num: int, length: int = None) -> list[int]:
     """
     Get digits of a number

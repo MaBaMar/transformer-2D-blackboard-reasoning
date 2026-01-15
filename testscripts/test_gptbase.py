@@ -1,3 +1,12 @@
+# ------------------------------------------------------------
+# run_gptbase.py
+#
+# visual tests to develop and build the GPT baseline model
+#
+# Run with:
+#  - python -m testscripts.run_gptbase
+#  - run from the project root
+# ------------------------------------------------------------
 
 import torch
 from torch.utils.data import DataLoader

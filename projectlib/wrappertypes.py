@@ -2,6 +2,8 @@
 # wrappertypes.py
 #
 # Collection of utility types and interfaces for the blackboard reasoning wrapper.
+# The wrapper implementations themselves are not part of the library
+# and implemented in src/
 # ------------------------------------------------------------
 
 from abc import ABC, abstractmethod

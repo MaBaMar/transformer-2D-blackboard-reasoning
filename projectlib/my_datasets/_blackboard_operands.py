@@ -1,3 +1,12 @@
+# ------------------------------------------------------------
+# _blackboard_operands.py
+#
+# Contains step-wise operators that are compatible with a basic blackoard
+# layout. Currently contains addition and subtraction. Could potentially
+# be extended with multiplication, mod or similar.
+# ------------------------------------------------------------
+
+
 from abc import ABC, abstractmethod
 
 class CarryOperation(ABC):

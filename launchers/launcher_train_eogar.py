@@ -1,3 +1,13 @@
+# ------------------------------------------------------------
+# launcher_train_eogar.py
+#
+# Configurable runner for training EOgar type models. Extensively
+# used for the OOD experiment described in the paper
+#
+# See README for directions on usage
+# ------------------------------------------------------------
+
+
 import argparse
 
 from src.training import train_eogar as experiment

@@ -9,11 +9,7 @@
 #   The blackboard frame is the area of the entire blackboard including empty spaces.
 #
 # Tokenization:
-#   Uses a customized tokenization procedure. Currently, we use a simple dummy tokenizer.
-#   This will have to be replaced with a more sophisticated tokenizer.
-#
-# Notes:
-#   - We're currently ignoring EOS and BOS tokens. We might need to add them later.
+#   Uses a customized tokenization procedure with a stripped-down vocabulary.
 #
 # Warning: For use with the dedicated blackboard models only!
 # ------------------------------------------------------------

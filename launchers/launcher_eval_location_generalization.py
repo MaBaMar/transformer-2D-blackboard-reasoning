@@ -1,3 +1,13 @@
+# ------------------------------------------------------------
+# launcher_eval_location_generalization.py
+#
+# Configurable runner for evaluating trained EOgar style
+# models on position randomized and non-position randomized data.
+# Used for randomization evaluation in our paper.
+#
+# See README for directions on usage
+# ------------------------------------------------------------
+
 import argparse
 
 from evaluation import run_evaluations as experiment

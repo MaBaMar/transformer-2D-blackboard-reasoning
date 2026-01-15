@@ -1,3 +1,12 @@
+# ------------------------------------------------------------
+# scratchpads.py
+#
+# Contains the original scratchpad-paper dataset format as described
+# by (Nye et al., 2021). The experiments support a flag in which
+# you can specify that you want to use this format instead of cot
+# ------------------------------------------------------------
+
+
 import torch
 
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast

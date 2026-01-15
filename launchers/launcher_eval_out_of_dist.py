@@ -1,3 +1,13 @@
+# ------------------------------------------------------------
+# launcher_eval_out_of_dist.py
+#
+# Configurable runner for evaluating trained EOgar and GPT style
+# models. Used for OOD evaluation in our paper.
+#
+# See README for directions on usage
+# ------------------------------------------------------------
+
+
 import argparse
 
 from evaluation import run_evaluations as experiment

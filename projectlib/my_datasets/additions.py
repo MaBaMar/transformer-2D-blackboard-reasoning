@@ -1,4 +1,12 @@
-import torch
+# ------------------------------------------------------------
+# additions.py
+#
+# Basic dataset, originally intended for experimentations with
+# pretrained models. Not directly used in any experiment and
+# generally deprecated. We do not guarantee that anything within
+# this file still works.
+#
+# ------------------------------------------------------------
 
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from typing import override, TypeAlias, Union, Optional

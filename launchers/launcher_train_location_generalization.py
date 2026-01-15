@@ -1,4 +1,14 @@
-import argparse 
+# ------------------------------------------------------------
+# launcher_train_location_generalization.py
+#
+# Configurable runner for training models on the location generalization
+# setting described in the paper.
+#
+# See README for directions on usage
+# ------------------------------------------------------------
+
+
+import argparse
 
 from src.training import train_eogar as experiment
 from evaluation.utils import generate_base_command, generate_run_commands

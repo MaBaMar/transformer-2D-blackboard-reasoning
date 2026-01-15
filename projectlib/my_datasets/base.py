@@ -1,3 +1,14 @@
+# ------------------------------------------------------------
+# base.py
+# 
+# Contains
+# - dataclasses for dataset generation specification
+# - base functionality and common interface of our custom datasets
+# - the DATA SAMPLING
+#
+# ------------------------------------------------------------
+
+
 import os
 import torch
 import numpy as np
@@ -26,6 +37,9 @@ OVERSAMPLING_FACTOR = 1.5
 TokenizerType: TypeAlias = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 PaddingMode: TypeAlias = Literal["longest", "max_length", "do_not_pad"]
 
+# ------------------------------------------------------------
+# Data classes
+# ------------------------------------------------------------
 
 class Split(Enum):
     EVAL = 1
@@ -67,6 +81,9 @@ class GenerationSpec:
         )
 
 
+# ------------------------------------------------------------
+# Dataset base interface
+# ------------------------------------------------------------
 
 class GeneratedDataset(Dataset, ABC):
     """
@@ -88,7 +105,7 @@ class GeneratedDataset(Dataset, ABC):
 
     Note:
         Subclasses have to implement the __generate__(self, spec: GenerationSpec, split: Split = Split.EVAL) function.
-    
+
     """
     def __init__(
         self,
@@ -173,6 +190,12 @@ class GeneratedDataset(Dataset, ABC):
             }
 
         return {"input": input, "label": label}
+
+# ------------------------------------------------------------
+# Data sampling. We support sampling of quite large numbers if
+# they still fit into a C size_t primitive (needed for extension
+# module support of python's random samplers)
+# ------------------------------------------------------------
 
     @staticmethod
     def _sample_numbers(spec: GenerationSpec, disallow_permutations: bool) -> list[tuple[int, int]]:
