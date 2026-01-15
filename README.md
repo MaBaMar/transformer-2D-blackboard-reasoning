@@ -211,4 +211,4 @@ Li, J.-N., Guan, J., Wu, W., Yu, Z., and Yan, R. 2d-tpe: Two-dimensional positio
 
 Nye, M., Andreassen, A. J., Gur-Ari, G., Michalewski, H.,Austin, J., Bieber, D., Dohan, D., Lewkowycz, A., Bosma, M., Luan, D., Sutton, C., and Odena, A. Show your work: Scratchpads for intermediate computation with language models, 2021. URL https://arxiv.org/abs/2112.00114.
 
-Radford, A., Narasimhan, K., Salimans, T., and Sutskever, I. Improving language understanding by generative pre-training. 2018. URL https: //cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf. Preprint.
+Radford, A., Narasimhan, K., Salimans, T., and Sutskever, I. Improving language understanding by generative pre-training. 2018. URL https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf. Preprint.
