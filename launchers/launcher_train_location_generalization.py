@@ -29,7 +29,7 @@ def mix(l1, l2, l3):
                 yield (i, j, k)
 
 bb_board_sizes = [(6, 20)]
-operations =  ["mixed"]# TODO: @LINO replace this with ["mixed"]
+operations =  ["add", "sub", "mixed"]
 randomize_position = [True, False]
 
 applicable_configs = {

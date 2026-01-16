@@ -15,7 +15,7 @@ from evaluation.utils import generate_base_command, generate_run_commands
 
 
 
-NAME = "OoD_Train_EOgar_Debug"
+NAME = "OoD_Train_EOgar"
 MODE = "dinfk"      # "local", "euler", "dinfk"
 LOGGING = "wandb"   # "wandb", "local", "none"
 
